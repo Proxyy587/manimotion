@@ -57,7 +57,7 @@ export default function ThreadPage() {
     setDraft(prompt);
     setEngine(thread?.engine ?? "auto");
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]); // reset both derived states when the thread id changes
+  }, [id, hydrated]); // threads load from storage after mount, so re-sync once hydrated
 
   // Starter templates auto-kick the pipeline so the first click always renders.
   useEffect(() => {
@@ -96,6 +96,18 @@ export default function ThreadPage() {
 
   const dirty = draft.trim() !== prompt.trim();
   const canGenerate = draft.trim().length >= PROMPT_MIN_LENGTH;
+  const rendering = thread.videos.some(
+    (v) => v.status === "queued" || v.status === "processing",
+  );
+
+  function generateFromShortcut() {
+    if (!canGenerate || rendering) return;
+    void startLectureRender(id, draft, {
+      duration: thread!.duration,
+      tier: thread!.tier,
+      engine,
+    });
+  }
 
   const selectedEngine = ENGINE_OPTIONS.find((o) => o.value === engine)!;
 
@@ -115,7 +127,7 @@ export default function ThreadPage() {
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
-          <div className="flex min-h-0 flex-1 flex-col">
+          <div className="flex flex-1 flex-col">
             <label htmlFor="thread-prompt" className="mm-label mb-2 block">
               Topic
             </label>
@@ -124,16 +136,25 @@ export default function ThreadPage() {
               value={draft}
               maxLength={PROMPT_MAX_LENGTH}
               onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                  e.preventDefault();
+                  generateFromShortcut();
+                }
+              }}
               rows={8}
               className="lime-focus min-h-[140px] flex-1 resize-none rounded-[10px] border border-[var(--chip-line)] bg-[var(--surface)] px-3 py-3 text-[13px] leading-relaxed text-foreground placeholder:text-[var(--muted-2)]"
               placeholder="Describe the lecture…"
             />
-            <p className="mt-1.5 text-[11px] tabular-nums text-[var(--muted-2)]">
-              {draft.trim().length}/{PROMPT_MAX_LENGTH}
-              {draft.trim().length > 0 &&
-                draft.trim().length < PROMPT_MIN_LENGTH &&
-                ` · min ${PROMPT_MIN_LENGTH}`}
-            </p>
+            <div className="mt-1.5 flex items-center justify-between text-[11px] text-[var(--muted-2)]">
+              <span className="tabular-nums">
+                {draft.trim().length}/{PROMPT_MAX_LENGTH}
+                {draft.trim().length > 0 &&
+                  draft.trim().length < PROMPT_MIN_LENGTH &&
+                  ` · min ${PROMPT_MIN_LENGTH}`}
+              </span>
+              <span className="hidden sm:inline">⌘/Ctrl + ↵ to generate</span>
+            </div>
             {dirty && (
               <button
                 type="button"

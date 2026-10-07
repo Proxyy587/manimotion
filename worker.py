@@ -25,7 +25,6 @@ from services.llm import (
     generate_remotion_code,
     generate_visual_plan,
 )
-from services.manim_pad import append_end_wait
 from services.merger import merge_video_audio_captions
 from services.remotion_renderer import render_remotion
 from services.renderer import get_media_duration, render_video
@@ -103,13 +102,53 @@ async def _run_manim_pipeline(
     audio_duration: Optional[float] = None,
     manim_quality: Optional[str] = None,
     tier: Optional[str] = None,
+    beat_map: Optional[dict[str, Any]] = None,
 ) -> tuple[Optional[str], Optional[str]]:
+    from services.beat_sync import instrument_beat_marks, read_beat_marks, retime_to_beats
     from services.example_store import save_successful_example
     from services.manim_attempt_models import get_model_for_manim_attempt
     from services.manim_error_parser import build_retry_prompt, parse_manim_error
     from services.manim_sanitizer import sanitize_manim_code
     from services.manim_templates import build_guaranteed_manim_code
     from services.manim_validator import format_validation_errors, validate_manim_code
+
+    marks_by_video: dict[str, str] = {}
+
+    def _render(src: str) -> tuple[Optional[str], Optional[str]]:
+        instrumented, n_marks = instrument_beat_marks(src)
+        marks_path = (
+            os.path.join(output_dir, f"beat_marks_{uuid.uuid4().hex[:8]}.json")
+            if n_marks
+            else None
+        )
+        out, render_err = render_video(
+            instrumented,
+            output_dir=output_dir,
+            log=log,
+            quality=manim_quality,
+            marks_path=marks_path,
+        )
+        if out and marks_path:
+            marks_by_video[out] = marks_path
+        return out, render_err
+
+    def _beat_lock(video_path: str) -> str:
+        if not (audio_duration and audio_duration > 0):
+            return video_path
+        try:
+            vd = get_media_duration(video_path)
+        except Exception:
+            return video_path
+        marks_path = marks_by_video.get(video_path)
+        marks = read_beat_marks(marks_path) if marks_path else {}
+        return retime_to_beats(
+            video_path,
+            video_marks=marks,
+            video_duration=vd,
+            beat_map=beat_map or {},
+            audio_duration=float(audio_duration),
+            log=log,
+        )
 
     last_error = None
     previous_code = None
@@ -192,9 +231,7 @@ async def _run_manim_pipeline(
                 continue
 
         previous_code = code
-        video, err = render_video(
-            code, output_dir=output_dir, log=log, quality=manim_quality
-        )
+        video, err = _render(code)
         if not video:
             info = parse_manim_error(err or "")
             if info.get("force_safe_tmt"):
@@ -204,12 +241,7 @@ async def _run_manim_pipeline(
                 if fixes:
                     log(f"  🔧 Crash repair: {', '.join(fixes)}")
                 if repaired != code:
-                    video2, err2 = render_video(
-                        repaired,
-                        output_dir=output_dir,
-                        log=log,
-                        quality=manim_quality,
-                    )
+                    video2, err2 = _render(repaired)
                     if video2:
                         previous_code = repaired
                         video = video2
@@ -238,40 +270,14 @@ async def _run_manim_pipeline(
                 continue
 
         save_successful_example(topic, previous_code or code, attempt=attempt)
-
-        # If picture undershot narration, one pad re-render (real waits > freeze-frame).
-        if audio_duration and audio_duration > 0 and previous_code:
-            try:
-                vd = get_media_duration(video)
-                shortfall = float(audio_duration) - vd
-            except Exception:
-                shortfall = 0.0
-            if shortfall > 1.5:
-                log(
-                    f"  ⏱️ Video short by {shortfall:.1f}s — "
-                    f"re-rendering once with end wait (no voice stretch)"
-                )
-                padded = append_end_wait(previous_code, shortfall)
-                video2, err2 = render_video(
-                    padded,
-                    output_dir=output_dir,
-                    log=log,
-                    quality=manim_quality,
-                )
-                if video2:
-                    return video2, None
-                log(
-                    f"  ⚠️ Pad re-render skipped ({(err2 or '')[:200]}) — merge will freeze-pad"
-                )
-        return video, None
+        # Lock every beat to its narration window instead of one long end freeze.
+        return _beat_lock(video), None
 
     log("\n🛟 All Manim attempts failed — rendering guaranteed fallback template")
     fallback_code = build_guaranteed_manim_code(topic, visual_plan)
-    video, err = render_video(
-        fallback_code, output_dir=output_dir, log=log, quality=manim_quality
-    )
+    video, err = _render(fallback_code)
     if video:
-        return video, None
+        return _beat_lock(video), None
     log(f"  ❌ Fallback template failed: {(err or '')[:300]}")
     return None, last_error or "Manim failed after all attempts"
 
@@ -598,6 +604,7 @@ async def process_topic_async(
                 audio_duration=audio_duration,
                 manim_quality=manim_quality,
                 tier=tier_name,
+                beat_map=beat_map,
             )
 
         if not (video and os.path.exists(video)):

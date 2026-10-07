@@ -44,6 +44,11 @@ are MEASURED from real narration — hard constraints.
 - Visual for beat N lives entirely inside that Sequence and should appear near START
 - Max 8 sequences; staggered reveals — never dump all UI at frame 0
 - Total frames ≈ target_duration_sec * 30
+- SPOKEN CUES ("+2.4s 'the slope of this line'") are offsets inside the beat: reveal
+  that element at local frame Math.round(2.4*30) inside the beat's Sequence, so each
+  bullet / bar / label appears exactly when the narrator says it (teacher-style).
+- Keep something moving through the whole beat (progress bar, highlight, subtle
+  scale) — no frozen frames longer than ~3s.
 
 ## High-value patterns (use when the beat needs them)
 1) Fade + slide entrance:

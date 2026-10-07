@@ -62,12 +62,45 @@ def find_timestamp_at_char(word_timestamps: list[dict[str, Any]], char_pos: int)
     if char_pos <= 0:
         return float(word_timestamps[0].get("start_s", 0.0))
 
+    # First word that starts at/after the marker position (markers sit right before
+    # the beat's first word, so this is that word).
     for word in word_timestamps:
-        start = int(word.get("char_offset", 0))
-        end = start + len(str(word.get("word", ""))) + 1  # +1 space
-        if char_pos < end:
+        if int(word.get("char_offset", 0)) >= char_pos:
             return float(word.get("start_s", 0.0))
     return float(word_timestamps[-1].get("start_s", 0.0))
+
+
+def build_spoken_cues(
+    word_timestamps: list[dict[str, Any]],
+    start_s: float,
+    end_s: float,
+    max_words: int = 7,
+) -> list[dict[str, Any]]:
+    """
+    Split a beat's words into short phrases with offsets relative to the beat start,
+    breaking at punctuation pauses or every `max_words` words.
+    """
+    words = [
+        w
+        for w in word_timestamps
+        if start_s - 0.05 <= float(w.get("start_s", 0.0)) < end_s - 0.05
+    ]
+    groups: list[list[dict[str, Any]]] = []
+    chunk: list[dict[str, Any]] = []
+    for w in words:
+        chunk.append(w)
+        if w.get("pause_after") or len(chunk) >= max_words:
+            groups.append(chunk)
+            chunk = []
+    if chunk:
+        groups.append(chunk)
+    return [
+        {
+            "t": round(max(0.0, float(g[0]["start_s"]) - start_s), 1),
+            "text": " ".join(str(w.get("word", "")) for w in g),
+        }
+        for g in groups
+    ]
 
 
 def build_beat_map(
@@ -114,6 +147,7 @@ def build_beat_map(
             "start_s": round(start_s, 3),
             "end_s": round(end_s, 3),
             "duration_sec": round(max(0.5, end_s - start_s), 3),
+            "cues": build_spoken_cues(word_timestamps, start_s, end_s),
         }
     return beat_map
 
@@ -145,6 +179,8 @@ def apply_measured_timings_to_plan(
         beat["end_s"] = info["end_s"]
         beat["duration_sec"] = info["duration_sec"]
         beat["timing_source"] = "tts"
+        if info.get("cues"):
+            beat["cues"] = info["cues"]
 
     measured_sum = sum(float(b.get("duration_sec", 0)) for b in beats)
     timed["target_duration_sec"] = int(

@@ -37,19 +37,36 @@ def _manim_quality_flag(override: Optional[str] = None) -> str:
     return {"low": "-ql", "medium": "-qm", "high": "-qh", "4k": "-qk"}.get(q, "-qm")
 
 
+def _render_timeout_sec() -> float:
+    try:
+        return max(60.0, float(os.getenv("MANIM_RENDER_TIMEOUT", "600")))
+    except ValueError:
+        return 600.0
+
+
 def render_video(
     code: str,
     output_dir: str,
     log=print,
     *,
     quality: Optional[str] = None,
+    marks_path: Optional[str] = None,
 ) -> tuple[Optional[str], Optional[str]]:
+    """
+    Render `Scene` from `code`. If `marks_path` is set, instrumented code writes
+    beat timestamps there (see services.beat_sync).
+    """
     log("Step 2/6: Starting Manim rendering...")
     job_id = str(uuid.uuid4())
     os.makedirs(output_dir, exist_ok=True)
     file_path = os.path.join(output_dir, f"{job_id}.py")
     with open(file_path, "w", encoding="utf-8") as f:
         f.write(code)
+
+    env = os.environ.copy()
+    if marks_path:
+        env["CLARITY_BEAT_MARKS"] = marks_path
+    timeout = _render_timeout_sec()
 
     quality_flag = _manim_quality_flag(quality)
     cmd = [
@@ -70,8 +87,18 @@ def render_video(
             check=True,
             capture_output=True,
             text=True,
+            env=env,
+            timeout=timeout,
         )
         log(f"  ✔️ Rendering finished in {time.time()-t0:.1f}s.")
+    except subprocess.TimeoutExpired:
+        err = (
+            f"Render timed out after {timeout:.0f}s (MANIM_RENDER_TIMEOUT). "
+            "The scene is too heavy: reduce always_redraw / updaters, sample counts, "
+            "and very long animations."
+        )
+        log(f"  ❌ {err}")
+        return None, err
     except FileNotFoundError as e:
         err = f"Manim executable not found: {e}"
         log(f"  ❌ {err}")

@@ -150,6 +150,14 @@ def format_beat_sheet_for_prompt(plan: dict[str, Any]) -> str:
             lines.append(f"--- BEAT {bid} ({dur}s) ---")
         lines.append(f"Visual: {beat.get('visual', '')}")
         lines.append(f"Narration: {beat.get('narration', '')}")
+        cues = beat.get("cues") or []
+        if cues:
+            lines.append(
+                "SPOKEN CUES (seconds from beat start → words). Reveal each element "
+                "when the narrator says it:"
+            )
+            for cue in cues[:12]:
+                lines.append(f"  +{float(cue.get('t', 0)):.1f}s  \"{cue.get('text', '')}\"")
         lines.append("")
     return "\n".join(lines).strip()
 

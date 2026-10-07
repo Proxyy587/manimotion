@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 from typing import Any
 
 import edge_tts
@@ -32,7 +33,7 @@ async def _stream_tts_with_words(
     submaker = edge_tts.SubMaker()
     audio_bytes = bytearray()
     word_timestamps: list[dict[str, Any]] = []
-    char_offset = 0
+    cursor = 0
 
     async for chunk in communicate.stream():
         if chunk["type"] == "audio":
@@ -42,15 +43,23 @@ async def _stream_tts_with_words(
             # 100-ns → seconds
             start_s = float(chunk["offset"]) / 10_000_000
             dur_s = float(chunk["duration"]) / 10_000_000
+            # Locate the word in the real script: TTS words omit punctuation, so a
+            # running "len(word)+1" count drifts later with every comma/period.
+            found = clean_script.find(word, cursor) if word else -1
+            char_offset = found if found >= 0 else cursor
+            end_char = char_offset + len(word)
             word_timestamps.append(
                 {
                     "word": word,
                     "start_s": start_s,
                     "end_s": start_s + dur_s,
                     "char_offset": char_offset,
+                    "pause_after": bool(
+                        re.match(r"\s*[,.;:!?\u2014]", clean_script[end_char : end_char + 3])
+                    ),
                 }
             )
-            char_offset += len(word) + 1
+            cursor = end_char
             if hasattr(submaker, "feed"):
                 submaker.feed(chunk)
             elif hasattr(submaker, "create_sub"):

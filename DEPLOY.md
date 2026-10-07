@@ -92,6 +92,13 @@ MANIM_ATTEMPT_MODELS=1:google/gemini-2.5-flash,2:google/gemini-2.5-flash,3:opena
 # Save first-try successes to data/manim_success_examples.jsonl and reuse them as few-shot examples
 MANIM_SAVE_EXAMPLES=1
 # MANIM_EXAMPLES_PATH=/data/manim_success_examples.jsonl
+# Kill a hung render after N seconds (counts as a failed attempt → retry)
+MANIM_RENDER_TIMEOUT=600
+
+# Beat-locked sync: each "# BEAT N" in the Manim code is stretched/held to start
+# exactly when its narration starts. Limits keep motion natural.
+BEAT_SYNC_MAX_SLOWDOWN=1.3
+BEAT_SYNC_MAX_SPEEDUP=1.6
 
 # Remotion reliability (optional, same format as the Manim settings)
 REMOTION_ATTEMPT_MODELS=1:google/gemini-2.5-flash,2:google/gemini-2.5-flash,3:openai/gpt-4o

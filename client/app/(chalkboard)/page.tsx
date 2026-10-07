@@ -29,6 +29,28 @@ import {
 } from "@/lib/prompt";
 import "@/app/landing.css";
 
+const IDEAS = [
+  { label: "Bayes' theorem", prompt: "Bayes' theorem with a medical test example" },
+  { label: "Fourier series", prompt: "How a Fourier series builds a square wave" },
+  { label: "d/dx sin x", prompt: "Why the derivative of sin(x) is cos(x)" },
+  {
+    label: "Market share chart",
+    prompt: "Smartphone market share 2020–2024 as an animated bar chart",
+  },
+  {
+    label: "Internet timeline",
+    prompt: "Timeline of the internet from ARPANET to today",
+  },
+];
+
+const PIPELINE_STEPS = ["Plan", "Narrate", "Animate", "Render", "Sync"];
+
+const ENGINE_HINTS: Record<"auto" | "manim" | "remotion", string> = {
+  auto: "Pick the engine automatically",
+  manim: "Math, equations, graphs",
+  remotion: "Charts, timelines, explainers",
+};
+
 const FEATURES = [
   {
     n: "01",
@@ -99,7 +121,7 @@ export default function LandingPage() {
       setValue("");
       router.push(`/thread/${id}`);
     },
-    [busy, createThreadFromPrompt, duration, model, router],
+    [busy, createThreadFromPrompt, duration, engine, model, router],
   );
 
   async function copyCmd() {
@@ -223,6 +245,8 @@ export default function LandingPage() {
                     <button
                       key={opt}
                       type="button"
+                      title={ENGINE_HINTS[opt]}
+                      aria-pressed={engine === opt}
                       onClick={() => setEngine(opt)}
                       className={[
                         "rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors",
@@ -265,6 +289,33 @@ export default function LandingPage() {
                 </div>
               </div>
             </div>
+            <div className="lp-composer-hint">
+              <span>
+                <kbd>↵</kbd> generate
+              </span>
+              <span>
+                <kbd>⇧</kbd>
+                <kbd>↵</kbd> new line
+              </span>
+            </div>
+
+            <div className="lp-ideas" aria-label="Topic ideas">
+              <span className="lp-ideas-label">Ideas</span>
+              {IDEAS.map((idea) => (
+                <button
+                  key={idea.label}
+                  type="button"
+                  className="lp-idea"
+                  title={idea.prompt}
+                  onClick={() => {
+                    setValue(idea.prompt);
+                    document.getElementById("landing-input")?.focus();
+                  }}
+                >
+                  {idea.label}
+                </button>
+              ))}
+            </div>
           </section>
 
           <section id="starters">
@@ -281,21 +332,25 @@ export default function LandingPage() {
                   disabled={busy}
                   onClick={() => submit(item.prompt, item)}
                 >
-                  <div className="n">{item.n}</div>
-                  <div className="t">
-                    {item.label}
-                    <span
-                      style={{
-                        marginLeft: 8,
-                        fontSize: 11,
-                        opacity: 0.65,
-                        fontWeight: 500,
-                      }}
-                    >
-                      {item.etaDisplay}
-                    </span>
+                  <div className="lp-starter-head">
+                    <span className="n">{item.n}</span>
+                    <ArrowUpRight
+                      className="lp-starter-arrow size-3.5"
+                      strokeWidth={1.75}
+                    />
                   </div>
+                  <div className="t">{item.label}</div>
                   <div className="b">{item.prompt}</div>
+                  <div className="lp-tags">
+                    <span className="lp-tag">
+                      {item.engine === "auto"
+                        ? "Auto"
+                        : item.engine.charAt(0).toUpperCase() +
+                          item.engine.slice(1)}
+                    </span>
+                    <span className="lp-tag">{item.duration}s</span>
+                    <span className="lp-tag">{item.etaDisplay}</span>
+                  </div>
                 </button>
               ))}
             </div>
@@ -307,6 +362,21 @@ export default function LandingPage() {
               Quality comes from planning first — not patching sync after the
               fact.
             </p>
+            <div className="lp-pipeline">
+              <span className="lp-pipeline-track" aria-hidden>
+                <span className="lp-pipeline-pulse" />
+              </span>
+              <ol aria-label="Generation pipeline">
+                {PIPELINE_STEPS.map((step, i) => (
+                  <li key={step} className="lp-pipeline-step">
+                    <span className="node">
+                      {String(i + 1).padStart(2, "0")}
+                    </span>
+                    <span className="label">{step}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
             <div className="lp-features">
               {FEATURES.map((f) => (
                 <div key={f.n} className="lp-feature">

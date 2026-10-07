@@ -1,6 +1,15 @@
 "use client";
 
+import {
+  AlertTriangle,
+  Check,
+  Download,
+  ExternalLink,
+  Link2,
+  RotateCcw,
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 
 import type { ThreadVideo } from "@/lib/chalkboard-types";
 import { cn } from "@/lib/utils";
@@ -46,7 +55,7 @@ function phaseIndex(phase: string | null | undefined): number {
 // Elapsed timer hook
 // ---------------------------------------------------------------------------
 
-function useElapsed(startMs: number | undefined, active: boolean): string {
+function useElapsedSeconds(startMs: number | undefined, active: boolean): number {
   const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
@@ -62,10 +71,209 @@ function useElapsed(startMs: number | undefined, active: boolean): string {
     };
   }, [active, startMs]);
 
-  if (!active) return "";
-  const m = Math.floor(elapsed / 60);
-  const s = elapsed % 60;
-  return `${m}:${String(s).padStart(2, "0")} elapsed`;
+  return active ? elapsed : 0;
+}
+
+function formatClock(totalSeconds: number): string {
+  const m = Math.floor(totalSeconds / 60);
+  const s = totalSeconds % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+function timeAgo(ms: number): string {
+  const s = Math.max(0, Math.floor((Date.now() - ms) / 1000));
+  if (s < 60) return "just now";
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+
+function slugify(text: string): string {
+  return (
+    text
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 60) || "manimotion-video"
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Overall progress bar (time-based with phase floor; never claims 100% early)
+// ---------------------------------------------------------------------------
+
+function RenderProgress({
+  elapsed,
+  etaSeconds,
+  phase,
+}: {
+  elapsed: number;
+  etaSeconds?: number | null;
+  phase: string | null | undefined;
+}) {
+  const step = phaseIndex(phase);
+  const byTime = etaSeconds && etaSeconds > 0 ? elapsed / etaSeconds : 0;
+  const byPhase = step >= 0 ? (step + 0.5) / PIPELINE.length : 0.03;
+  const pct = Math.min(0.95, Math.max(byTime, byPhase, 0.03));
+  const slow = Boolean(etaSeconds && elapsed > etaSeconds * 1.25);
+
+  return (
+    <div className="w-full max-w-[260px]">
+      <div className="mb-1.5 flex items-center justify-between text-[10px] text-[var(--muted-2)]">
+        <span>
+          {step >= 0 ? `Step ${step + 1} of ${PIPELINE.length}` : "Queued"}
+        </span>
+        <span className="tabular-nums">{Math.round(pct * 100)}%</span>
+      </div>
+      <div
+        className="h-[3px] overflow-hidden rounded-full bg-[var(--chip-line)]"
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(pct * 100)}
+      >
+        <div
+          className="h-full rounded-full bg-[var(--mm-accent)] transition-[width] duration-700 ease-out"
+          style={{ width: `${pct * 100}%` }}
+        />
+      </div>
+      {slow && (
+        <p className="mt-2 text-center text-[10px] text-[var(--muted-2)]">
+          Taking longer than usual — retries and fallbacks keep it going.
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Completed video actions
+// ---------------------------------------------------------------------------
+
+function VideoActions({ url, title }: { url: string; title: string }) {
+  const [copied, setCopied] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+
+  async function download() {
+    if (downloading) return;
+    setDownloading(true);
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(String(res.status));
+      const href = URL.createObjectURL(await res.blob());
+      const a = document.createElement("a");
+      a.href = href;
+      a.download = `${slugify(title)}.mp4`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(href), 1000);
+    } catch {
+      window.open(url, "_blank", "noopener,noreferrer");
+    } finally {
+      setDownloading(false);
+    }
+  }
+
+  async function copyLink() {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
+    } catch {
+      toast.error("Couldn't copy the link");
+    }
+  }
+
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2">
+      <button
+        type="button"
+        onClick={() => void download()}
+        disabled={downloading}
+        className="mm-ghost-btn flex items-center gap-1.5 px-3 py-1.5 text-[11px]"
+      >
+        <Download className="size-3.5" strokeWidth={1.75} />
+        {downloading ? "Downloading…" : "Download MP4"}
+      </button>
+      <button
+        type="button"
+        onClick={() => void copyLink()}
+        className="mm-ghost-btn flex items-center gap-1.5 px-3 py-1.5 text-[11px]"
+      >
+        {copied ? (
+          <Check className="size-3.5" strokeWidth={1.75} />
+        ) : (
+          <Link2 className="size-3.5" strokeWidth={1.75} />
+        )}
+        {copied ? "Copied" : "Copy link"}
+      </button>
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="mm-ghost-btn flex items-center gap-1.5 px-3 py-1.5 text-[11px]"
+      >
+        <ExternalLink className="size-3.5" strokeWidth={1.75} />
+        Open
+      </a>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Failed state
+// ---------------------------------------------------------------------------
+
+function FailedState({
+  error,
+  onRetry,
+  retryDisabled,
+}: {
+  error?: string | null;
+  onRetry: () => void;
+  retryDisabled?: boolean;
+}) {
+  const full = (error ?? "").trim();
+  const firstLine = full.split("\n").find((l) => l.trim()) ?? "";
+  const summary =
+    firstLine.length > 160 ? `${firstLine.slice(0, 157)}…` : firstLine;
+  const hasDetails = full.length > summary.length;
+
+  return (
+    <div className="flex size-full items-center justify-center overflow-y-auto p-6">
+      <div className="flex w-full max-w-md flex-col items-center gap-3 text-center">
+        <span className="flex size-9 items-center justify-center rounded-[10px] border border-red-400/30 bg-red-400/10">
+          <AlertTriangle className="size-4 text-red-300" strokeWidth={1.75} />
+        </span>
+        <p className="text-[13px] font-semibold text-foreground">
+          This render didn&apos;t make it
+        </p>
+        <p className="text-[12px] leading-relaxed text-[var(--muted-text)]">
+          {summary || "Generation failed."}
+        </p>
+        <button
+          type="button"
+          onClick={onRetry}
+          disabled={retryDisabled}
+          className="mm-pixel-btn mt-1 flex items-center gap-2 px-4 py-2"
+        >
+          <RotateCcw className="size-3.5" strokeWidth={1.75} />
+          Try again
+        </button>
+        {hasDetails && (
+          <details className="mt-2 w-full text-left">
+            <summary className="cursor-pointer text-[11px] text-[var(--muted-2)] hover:text-[var(--ink-soft)]">
+              Error details
+            </summary>
+            <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-[8px] border border-[var(--line)] bg-[var(--chip)] p-3 text-[10.5px] leading-relaxed text-[var(--muted-text)]">
+              {full}
+            </pre>
+          </details>
+        )}
+      </div>
+    </div>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -278,7 +486,8 @@ export function ChalkCanvas({
   const rendering =
     activeVideo?.status === "queued" || activeVideo?.status === "processing";
 
-  const elapsedStr = useElapsed(activeVideo?.createdAt, rendering);
+  const elapsed = useElapsedSeconds(activeVideo?.createdAt, rendering);
+  const elapsedStr = rendering ? `${formatClock(elapsed)} elapsed` : "";
 
   async function handleRender() {
     if (busy || renderDisabled) return;
@@ -343,7 +552,12 @@ export function ChalkCanvas({
                       : "rounded-[9px] text-[var(--muted-text)] hover:bg-[var(--chip)] hover:text-[var(--ink-soft)]",
                   )}
                 >
-                  <span className="line-clamp-1 flex-1">{v.title}</span>
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="line-clamp-1">{v.title}</span>
+                    <span className="text-[9.5px] text-[var(--muted-2)]">
+                      {timeAgo(v.createdAt)}
+                    </span>
+                  </span>
                   <span className="shrink-0 text-[10px]">
                     <StatusBadge v={v} />
                   </span>
@@ -355,7 +569,7 @@ export function ChalkCanvas({
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col p-3">
           <div className="mm-panel mm-scan relative flex min-h-0 flex-1 flex-col overflow-hidden">
-            <div className="relative z-[1] min-h-0 flex-1 bg-[#0a0a09]">
+            <div className="dark relative z-[1] min-h-0 flex-1 bg-[#0a0a09] text-foreground">
               {activeVideo?.status === "completed" &&
               activeVideo.videoUrl &&
               activeVideo.videoUrl.length > 0 ? (
@@ -368,11 +582,11 @@ export function ChalkCanvas({
                   src={activeVideo.videoUrl}
                 />
               ) : activeVideo?.status === "failed" ? (
-                <div className="flex size-full items-center justify-center p-6">
-                  <p className="max-w-md text-center text-[12px] leading-relaxed text-red-300/90">
-                    {activeVideo.error ?? "Generation failed."}
-                  </p>
-                </div>
+                <FailedState
+                  error={activeVideo.error}
+                  onRetry={() => void handleRender()}
+                  retryDisabled={isWorking || renderDisabled}
+                />
               ) : (
                 // Loading / idle state
                 <div className="flex size-full flex-col items-center justify-center gap-5 p-6">
@@ -400,6 +614,14 @@ export function ChalkCanvas({
                     </div>
                   )}
 
+                  {rendering && (
+                    <RenderProgress
+                      elapsed={elapsed}
+                      etaSeconds={activeVideo?.etaSeconds}
+                      phase={activeVideo?.phase}
+                    />
+                  )}
+
                   {/* Phase progress */}
                   {rendering && (
                     <div className="mt-1 w-full max-w-[200px]">
@@ -413,6 +635,9 @@ export function ChalkCanvas({
               )}
             </div>
           </div>
+          {activeVideo?.status === "completed" && activeVideo.videoUrl ? (
+            <VideoActions url={activeVideo.videoUrl} title={activeVideo.title} />
+          ) : null}
         </div>
       </div>
     </section>

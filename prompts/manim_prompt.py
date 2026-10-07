@@ -82,6 +82,17 @@ RULES:
 - Use FadeOut sweep between beats: self.play(*[FadeOut(m) for m in self.mobjects], run_time=0.5)
   Then subtract 0.5 from the NEXT beat's available time.
 
+TEACHER-STYLE PACING (visuals follow the voice, like a presenter clicking through a slide):
+- Each beat lists SPOKEN CUES: "+2.4s  'the slope of this line'". Make the matching
+  element appear at that offset: self.wait(gap) then self.play(...) so the reveal
+  lands as the words are spoken.
+- Build each beat progressively: 2–4 reveals spread across the beat. Never dump the
+  whole slide at once and then hold it.
+- No single self.wait() longer than 3.0s. Fill long beats with small motions instead
+  (Indicate, Circumscribe, a highlight box, moving a dot, a color change).
+- Keep the exact "# BEAT N" comment line at the start of every beat — the renderer
+  uses it to lock each beat to the narration.
+
 When timing_source=tts, start_s and duration_sec are from REAL audio — hard constraints.
 Example for 5 beats at 7s each:
   # BEAT 1 @ 0.0s (7.0s)

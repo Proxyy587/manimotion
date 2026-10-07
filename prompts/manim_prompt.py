@@ -133,6 +133,13 @@ After VGroup.arrange:
    Do NOT pass x_range values outside the axis x_range — this causes ValueError.
 10) area_under_curve / get_area: use axes.get_area(graph, x_range=[a, b]) only — no other args
 11) For Riemann approximations use a fixed small dx (0.25 to 0.5) — NOT a ValueTracker for n
+12) Manim CE API ONLY (not ManimGL / old tutorials):
+    axes.plot(f, color=...)          NOT axes.get_graph(...)
+    axes.plot_derivative_graph(...)  NOT get_derivative_graph
+    Create(...)                      NOT ShowCreation
+    MathTex / Tex / Text             NOT TexMobject / TextMobject
+    FadeIn(m, shift=DOWN)            NOT FadeInFrom(m, DOWN)
+    class Scene(Scene) + Axes(...)   NOT GraphScene / self.setup_axes()
 
 ## Pacing
 - 4–8 beats typical
@@ -187,6 +194,9 @@ Common fixes (apply ALL that match):
   rects = axes.get_riemann_rectangles(graph, x_range=[a, b], dx=0.25, input_sample_type="right")
   Also ensure x_range=[a, b] values are within the axis x_range bounds.
 - AttributeError on get_area / area_under_curve: use axes.get_area(graph, x_range=[a, b])
+- "getter() got an unexpected keyword argument": an old ManimGL method was used.
+  axes.get_graph → axes.plot, ShowCreation → Create, TexMobject → MathTex,
+  TextMobject → Text, FadeInFrom(m, DIR) → FadeIn(m, shift=DIR)
 - Static video (same content whole duration): LLM forgot to FadeOut between beats.
   Beats 2+ MUST begin with: self.play(*[FadeOut(m) for m in self.mobjects], run_time=0.5)
   Each beat must show DIFFERENT content — never leave beat 1 visible during beat 2+.

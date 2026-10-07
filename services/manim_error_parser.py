@@ -34,9 +34,30 @@ ERROR_FIX_MAP: dict[str, str] = {
         "Reduce complexity: fewer run_time values, remove 3D content, "
         "simplify updaters, reduce Riemann rectangle count."
     ),
+    "DeprecatedAPI": (
+        "You used an old ManimGL method. In Manim CE: axes.get_graph → axes.plot, "
+        "get_derivative_graph → plot_derivative_graph, get_parametric_curve → "
+        "plot_parametric_curve, ShowCreation → Create, TexMobject → MathTex, "
+        "TextMobject → Text, FadeInFrom(m, DIR) → FadeIn(m, shift=DIR). No GraphScene."
+    ),
     "ZeroDuration": (
         "Delete every self.wait(0). All run_time values must be > 0 (minimum 0.5)."
     ),
+}
+
+
+_OLD_CLASS_NAMES = {
+    "ShowCreation",
+    "TextMobject",
+    "TexMobject",
+    "GraphScene",
+    "FadeInFrom",
+    "FadeInFromDown",
+    "FadeOutAndShift",
+    "ShowCreationThenDestruction",
+    "CircleIndicate",
+    "WiggleOutThenIn",
+    "ParametricSurface",
 }
 
 
@@ -115,8 +136,12 @@ def parse_manim_error(stderr: str) -> dict[str, Any]:
                 "type": "NameError",
                 "message": f"'{name}' is not defined",
                 "fix_hint": (
-                    f"'{name}' is undefined. Keep `from manim import *` and fix the name. "
-                    "Do not invent APIs."
+                    ERROR_FIX_MAP["DeprecatedAPI"]
+                    if name in _OLD_CLASS_NAMES
+                    else (
+                        f"'{name}' is undefined. Keep `from manim import *` and fix the name. "
+                        "Do not invent APIs."
+                    )
                 ),
             }
         )
@@ -131,6 +156,22 @@ def parse_manim_error(stderr: str) -> dict[str, Any]:
                     "Remove ALL get_part_by_tex / get_parts_by_tex. "
                     "Highlight whole MathTex with SurroundingRectangle only."
                 ),
+            }
+        )
+        return result
+
+    if "__getattr__.<locals>.getter()" in text:
+        old = re.search(
+            r"\.(get_graph|get_derivative_graph|get_antiderivative_graph|"
+            r"get_parametric_curve|get_implicit_curve|get_line_graph|get_polar_graph)\s*\(",
+            text,
+        )
+        name = old.group(1) if old else "get_*"
+        result.update(
+            {
+                "type": "DeprecatedAPI",
+                "message": f"'{name}' is not a Manim CE method (old ManimGL API)",
+                "fix_hint": ERROR_FIX_MAP["DeprecatedAPI"],
             }
         )
         return result

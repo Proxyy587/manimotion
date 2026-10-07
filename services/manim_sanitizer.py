@@ -266,6 +266,58 @@ def fix_get_parts_indexing(code: str, fixes: list[str]) -> str:
     return stripped
 
 
+# Old ManimGL / pre-0.15 CE names that no longer exist. Unknown `get_*` methods hit
+# Mobject.__getattr__ and fail with "getter() got an unexpected keyword argument".
+_RENAMED_METHODS = {
+    "get_graph": "plot",
+    "get_derivative_graph": "plot_derivative_graph",
+    "get_antiderivative_graph": "plot_antiderivative_graph",
+    "get_parametric_curve": "plot_parametric_curve",
+    "get_implicit_curve": "plot_implicit_curve",
+    "get_line_graph": "plot_line_graph",
+    "get_polar_graph": "plot_polar_graph",
+}
+_RENAMED_CLASSES = {
+    "ShowCreationThenDestruction": "ShowPassingFlash",
+    "ShowCreation": "Create",
+    "TexMobject": "MathTex",
+    "TextMobject": "Tex",
+    "CircleIndicate": "Indicate",
+    "WiggleOutThenIn": "Wiggle",
+    "ParametricSurface": "Surface",
+}
+
+
+def fix_deprecated_api(code: str, fixes: list[str]) -> str:
+    renamed: list[str] = []
+    for old, new in _RENAMED_METHODS.items():
+        code, n = re.subn(rf"\.{old}\s*\(", f".{new}(", code)
+        if n:
+            renamed.append(f"{old}→{new}")
+    for old, new in _RENAMED_CLASSES.items():
+        code, n = re.subn(rf"\b{old}\s*\(", f"{new}(", code)
+        if n:
+            renamed.append(f"{old}→{new}")
+
+    # FadeInFrom(mob, DIR) / FadeOutAndShift(mob, DIR) → FadeIn/FadeOut(mob, shift=DIR)
+    for old, new in (("FadeInFrom", "FadeIn"), ("FadeOutAndShift", "FadeOut")):
+        code, n = re.subn(
+            rf"\b{old}\(\s*([^,()]+?)\s*,\s*([^,()=]+?)\s*\)",
+            rf"{new}(\1, shift=\2)",
+            code,
+        )
+        code, n2 = re.subn(rf"\b{old}\(\s*([^,()]+?)\s*\)", rf"{new}(\1)", code)
+        if n or n2:
+            renamed.append(f"{old}→{new}(shift=)")
+    code, n = re.subn(r"\bFadeInFromDown\(\s*([^,()]+?)\s*\)", r"FadeIn(\1, shift=UP)", code)
+    if n:
+        renamed.append("FadeInFromDown→FadeIn(shift=UP)")
+
+    if renamed:
+        fixes.append("Updated deprecated API: " + ", ".join(renamed))
+    return code
+
+
 def ensure_manim_import(code: str, fixes: list[str]) -> str:
     if "from manim import *" not in code:
         code = "from manim import *\n" + code.lstrip()
@@ -323,6 +375,7 @@ def sanitize_manim_code(
 
     code = ensure_manim_import(code, fixes)
     code = fix_scene_class_name(code, fixes)
+    code = fix_deprecated_api(code, fixes)
     code = fix_get_parts_indexing(code, fixes)
     code = _fix_nonpositive_timings(code, fixes)
     if force_safe_tmt:

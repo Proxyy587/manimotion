@@ -120,6 +120,30 @@ def validate_manim_code(code: str) -> list[ValidationIssue]:
                 )
             )
 
+    if re.search(r"\bGraphScene\b|self\.setup_axes\s*\(", code):
+        issues.append(
+            ValidationIssue(
+                severity="error",
+                message="GraphScene / self.setup_axes() do not exist in Manim CE",
+                fix="Use class Scene(Scene) with axes = Axes(...) and axes.plot(...)",
+            )
+        )
+    for i, line in enumerate(lines, start=1):
+        m = re.search(
+            r"\.(get_graph|get_derivative_graph|get_parametric_curve|get_implicit_curve)\s*\(|"
+            r"\b(ShowCreation|TextMobject|TexMobject|FadeInFrom|FadeOutAndShift)\s*\(",
+            line,
+        )
+        if m:
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    message=f"Line {i}: '{m.group(1) or m.group(2)}' is not Manim CE API",
+                    line=i,
+                    fix="Use axes.plot / Create / MathTex / Text / FadeIn(mob, shift=DIR)",
+                )
+            )
+
     for axes_call in re.findall(r"Axes\s*\([^)]*\)", code):
         if "x_length" not in axes_call:
             issues.append(

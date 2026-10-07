@@ -21,10 +21,7 @@ import {
   setPreferredDuration,
   setPreferredModel,
 } from "@/lib/chalkboard-api";
-import {
-  DEMO_PROMPTS,
-  type DemoPrompt,
-} from "@/lib/demo-prompts";
+import { DEMO_PROMPTS, type DemoPrompt } from "@/lib/demo-prompts";
 import {
   PROMPT_MAX_LENGTH,
   PROMPT_MIN_LENGTH,
@@ -57,6 +54,7 @@ export default function LandingPage() {
   const [value, setValue] = useState("");
   const [model, setModel] = useState(DEFAULT_LECTURE_MODEL);
   const [duration, setDuration] = useState<number | undefined>(undefined);
+  const [engine, setEngine] = useState<"auto" | "manim" | "remotion">("auto");
   const [busy, setBusy] = useState(false);
   const [prefsReady, setPrefsReady] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -95,7 +93,7 @@ export default function LandingPage() {
         model,
         duration: demo?.duration ?? duration,
         tier: demo?.tier ?? "tier2",
-        engine: demo?.engine ?? "auto",
+        engine: demo?.engine ?? engine,
         autoStart: Boolean(demo),
       });
       setValue("");
@@ -220,6 +218,25 @@ export default function LandingPage() {
                     Loading models…
                   </div>
                 )}
+                <div className="flex items-center gap-1">
+                  {(["auto", "manim", "remotion"] as const).map((opt) => (
+                    <button
+                      key={opt}
+                      type="button"
+                      onClick={() => setEngine(opt)}
+                      className={[
+                        "rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors",
+                        engine === opt
+                          ? "border-[var(--chip-line)] bg-[var(--chip)] text-foreground"
+                          : "border-transparent text-[var(--lp-muted-2)] hover:text-foreground",
+                      ].join(" ")}
+                    >
+                      {opt === "auto"
+                        ? "Auto"
+                        : opt.charAt(0).toUpperCase() + opt.slice(1)}
+                    </button>
+                  ))}
+                </div>
                 <div className="flex flex-1 items-center justify-end gap-3">
                   <span className="text-[11px] tabular-nums text-[var(--lp-muted-2)]">
                     {value.trim().length}/{PROMPT_MAX_LENGTH}

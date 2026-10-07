@@ -8,3 +8,4 @@ __pycache__
 remotion-src/node_modules/
 client/node_modules/
 client/.next/
+data/*.jsonl

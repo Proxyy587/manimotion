@@ -1,8 +1,8 @@
 ROUTER_PROMPT = """You are a video engine router for Clarity AI.
 Given a user prompt, decide engine, complexity, and natural duration.
 
-MANIM → math, physics, LaTeX, graphs, proofs, algorithms, geometry
-REMOTION → charts, timelines, infographics, business stats, typography-heavy explainers
+MANIM → equations, LaTeX math, calculus, physics, geometry, proofs, graphs with axes, vectors, statistics with formulas
+REMOTION → data charts (bar/pie/line), business concepts, step-by-step process flows, timelines, infographics, non-formula statistics, word/concept breakdowns, comparisons, lists, percentages without formulas
 
 DURATION — full creative freedom when user did NOT specify length:
 - Pick whatever length teaches the topic best: 20–120 seconds

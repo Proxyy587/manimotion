@@ -5,6 +5,45 @@ from __future__ import annotations
 import re
 from typing import Any
 
+ERROR_FIX_MAP: dict[str, str] = {
+    "TransformMatchingTex": (
+        "Replace ALL TransformMatchingTex() with ReplacementTransform(). "
+        "TransformMatchingTex ONLY works between two MathTex objects — never Text, VGroup, or mixed."
+    ),
+    "AssertionError": (
+        "An object passed to TransformMatchingTex is not a MathTex. "
+        "Replace TransformMatchingTex with ReplacementTransform everywhere in this script."
+    ),
+    "get_parts_by_tex": (
+        "Remove get_part_by_tex / get_parts_by_tex. "
+        "Highlight whole MathTex with SurroundingRectangle only."
+    ),
+    "TexPart": (
+        "Remove get_part_by_tex / get_parts_by_tex. "
+        "Highlight whole MathTex with SurroundingRectangle only."
+    ),
+    "SyntaxError": (
+        "Fix the Python syntax error on the line indicated. "
+        "If using f-strings inside MathTex with backslashes, use string concatenation instead."
+    ),
+    "AttributeError": (
+        "Check the exact attribute name in the error. "
+        "Common fixes: coords_to_point → c2p, point_to_coords → p2c."
+    ),
+    "timeout": (
+        "Reduce complexity: fewer run_time values, remove 3D content, "
+        "simplify updaters, reduce Riemann rectangle count."
+    ),
+    "ZeroDuration": (
+        "Delete every self.wait(0). All run_time values must be > 0 (minimum 0.5)."
+    ),
+}
+
+
+def classify_error(stderr: str) -> str:
+    """Lightweight classifier for retry routing (mirrors parse_manim_error types)."""
+    return parse_manim_error(stderr or "").get("type", "unknown")
+
 
 def parse_manim_error(stderr: str) -> dict[str, Any]:
     text = stderr or ""
@@ -141,7 +180,17 @@ def parse_manim_error(stderr: str) -> dict[str, Any]:
             {
                 "type": "SyntaxError",
                 "message": syn_match.group(1)[:300],
-                "fix_hint": "Fix Python syntax; return a complete valid script.",
+                "fix_hint": ERROR_FIX_MAP["SyntaxError"],
+            }
+        )
+        return result
+
+    if "TimeoutExpired" in text or "timed out" in text.lower():
+        result.update(
+            {
+                "type": "timeout",
+                "message": "Render or subprocess timed out",
+                "fix_hint": ERROR_FIX_MAP["timeout"],
             }
         )
         return result
@@ -171,14 +220,47 @@ def _attribute_hint(obj_type: str, attr: str) -> str:
     )
 
 
+def build_retry_prompt(
+    *,
+    attempt: int,
+    max_attempts: int,
+    broken_code: str,
+    stderr: str,
+    topic: str = "",
+) -> str:
+    """Structured retry header for the user message."""
+    info = parse_manim_error(stderr)
+    err_type = info.get("type", "unknown")
+    fix = info.get("fix_hint") or ERROR_FIX_MAP.get(err_type, "Fix the error shown below")
+    tail = (stderr or "")[-800:]
+    code_trim = broken_code if len(broken_code) < 8000 else broken_code[:8000] + "\n# ..."
+    return f"""MANIM CODE FAILED. Fix attempt {attempt}/{max_attempts}.
+TOPIC: {topic}
+
+SPECIFIC ERROR ({err_type}):
+{tail}
+
+REQUIRED FIX:
+{fix}
+
+BROKEN CODE (return the COMPLETE fixed script; change only what caused the error):
+{code_trim}
+
+Rules:
+- Class must be: class Scene(Scene):
+- Fix ONLY what caused this error; do not rewrite working sections."""
+
+
 def format_error_for_llm(
     error_info: dict[str, Any], previous_code: str | None = None
 ) -> str:
     """Compact, actionable error block for generate_manim_code retries."""
+    err_type = error_info.get("type", "unknown")
+    fix = error_info.get("fix_hint") or ERROR_FIX_MAP.get(err_type, "")
     parts = [
-        f"ERROR TYPE: {error_info.get('type', 'unknown')}",
+        f"ERROR TYPE: {err_type}",
         f"ERROR: {error_info.get('message', '')}",
-        f"FIX REQUIRED: {error_info.get('fix_hint', '')}",
+        f"FIX REQUIRED: {fix}",
     ]
     if error_info.get("line"):
         parts.append(f"Approx line: {error_info['line']}")

@@ -1,15 +1,23 @@
 import asyncio
 import os
+import subprocess
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Optional
 
+from prompts.manim_prompt import MANIM_ERROR_HINTS
 from router import route_prompt
 from services.audio import generate_audio_with_captions
 from services.beat_timing import apply_measured_timings_to_plan
-from services.config import cleanup_job_dir, job_work_dir, keep_local_outputs, storage_policy
+from services.config import (
+    cleanup_job_dir,
+    job_work_dir,
+    keep_local_outputs,
+    storage_policy,
+)
 from services.llm import (
     DEFAULT_MODEL,
+    NARRATION_MODEL,
     beat_sheet_target_duration,
     format_beat_sheet_for_prompt,
     generate_manim_code,
@@ -18,13 +26,11 @@ from services.llm import (
     generate_visual_plan,
 )
 from services.manim_pad import append_end_wait
-from prompts.manim_prompt import MANIM_ERROR_HINTS
 from services.merger import merge_video_audio_captions
 from services.remotion_renderer import render_remotion
 from services.renderer import get_media_duration, render_video
 from services.storage import upload_to_r2
 from services.user_storage import UserStorageConfig
-import subprocess
 
 
 def _default_max_attempts() -> int:
@@ -98,13 +104,17 @@ async def _run_manim_pipeline(
     manim_quality: Optional[str] = None,
     tier: Optional[str] = None,
 ) -> tuple[Optional[str], Optional[str]]:
-    from services.manim_error_parser import format_error_for_llm, parse_manim_error
+    from services.example_store import save_successful_example
+    from services.manim_attempt_models import get_model_for_manim_attempt
+    from services.manim_error_parser import build_retry_prompt, parse_manim_error
     from services.manim_sanitizer import sanitize_manim_code
+    from services.manim_templates import build_guaranteed_manim_code
     from services.manim_validator import format_validation_errors, validate_manim_code
 
     last_error = None
     previous_code = None
     force_safe_tmt = False
+    last_stderr = ""
     plan_text = format_beat_sheet_for_prompt(visual_plan)
     for attempt in range(1, max_attempts + 1):
         attempt_complexity = complexity
@@ -125,11 +135,15 @@ async def _run_manim_pipeline(
                 "Match beat START AT / HOLD FOR timings with positive self.wait().\n"
                 f"Original plan intent (simplify heavily):\n{plan_text[:1200]}"
             )
-        log(f"\n🧠 Manim attempt {attempt}/{max_attempts} (complexity={attempt_complexity})")
+        attempt_model = get_model_for_manim_attempt(attempt, model)
+        log(
+            f"\n🧠 Manim attempt {attempt}/{max_attempts} "
+            f"(complexity={attempt_complexity}, model={attempt_model})"
+        )
         try:
             code = generate_manim_code(
                 topic=topic,
-                model=model,
+                model=attempt_model,
                 visual_plan=attempt_plan,
                 duration=duration,
                 complexity=attempt_complexity,
@@ -166,7 +180,9 @@ async def _run_manim_pipeline(
                 errors = [i for i in issues if i.severity == "error"]
             if errors:
                 last_error = (
-                    "ValidationError\n" + format_validation_errors(errors) + "\n"
+                    "ValidationError\n"
+                    + format_validation_errors(errors)
+                    + "\n"
                     + MANIM_ERROR_HINTS
                 )
                 previous_code = code
@@ -205,7 +221,14 @@ async def _run_manim_pipeline(
                         info = parse_manim_error(err or "")
 
             if not video:
-                last_error = format_error_for_llm(info, previous_code)
+                last_stderr = err or ""
+                last_error = build_retry_prompt(
+                    attempt=attempt,
+                    max_attempts=max_attempts,
+                    broken_code=previous_code or code,
+                    stderr=last_stderr,
+                    topic=topic,
+                )
                 log(
                     f"🔁 Manim render failed ({info.get('type')}): "
                     f"{info.get('message')}"
@@ -213,6 +236,8 @@ async def _run_manim_pipeline(
                 if info.get("fix_hint"):
                     log(f"   💡 {info['fix_hint'][:200]}")
                 continue
+
+        save_successful_example(topic, previous_code or code, attempt=attempt)
 
         # If picture undershot narration, one pad re-render (real waits > freeze-frame).
         if audio_duration and audio_duration > 0 and previous_code:
@@ -235,8 +260,19 @@ async def _run_manim_pipeline(
                 )
                 if video2:
                     return video2, None
-                log(f"  ⚠️ Pad re-render skipped ({(err2 or '')[:200]}) — merge will freeze-pad")
+                log(
+                    f"  ⚠️ Pad re-render skipped ({(err2 or '')[:200]}) — merge will freeze-pad"
+                )
         return video, None
+
+    log("\n🛟 All Manim attempts failed — rendering guaranteed fallback template")
+    fallback_code = build_guaranteed_manim_code(topic, visual_plan)
+    video, err = render_video(
+        fallback_code, output_dir=output_dir, log=log, quality=manim_quality
+    )
+    if video:
+        return video, None
+    log(f"  ❌ Fallback template failed: {(err or '')[:300]}")
     return None, last_error or "Manim failed after all attempts"
 
 
@@ -270,7 +306,9 @@ async def _run_remotion_pipeline(
                 "Honor BEAT start_s / duration_sec from the sheet.\n"
                 f"Original plan intent (simplify heavily):\n{plan_text[:1200]}"
             )
-        log(f"\n🧠 Remotion attempt {attempt}/{max_attempts} (complexity={attempt_complexity})")
+        log(
+            f"\n🧠 Remotion attempt {attempt}/{max_attempts} (complexity={attempt_complexity})"
+        )
         try:
             code = generate_remotion_code(
                 topic=topic,
@@ -298,12 +336,9 @@ async def _run_remotion_pipeline(
             verdict = str(judgment.get("verdict", "approve")).lower()
             score = int(judgment.get("score") or 0)
             if verdict == "regenerate" or score < 50:
-                last_error = (
-                    "Quality judge rejected code: "
-                    + "; ".join(
-                        str(i.get("description", ""))
-                        for i in (judgment.get("issues") or [])[:3]
-                    )
+                last_error = "Quality judge rejected code: " + "; ".join(
+                    str(i.get("description", ""))
+                    for i in (judgment.get("issues") or [])[:3]
                 )
                 previous_code = code
                 log("  ⚠️ Judge requested regenerate — retrying...")
@@ -450,7 +485,9 @@ async def process_topic_async(
             visual_plan["beats"] = beats[:max_beats]
             log(f"  ✂️ Tier {tier_name}: trimmed to {max_beats} beats")
         plan_duration = int(beat_sheet_target_duration(visual_plan))
-        log(f"Beat sheet ready: {len(visual_plan.get('beats', []))} beats, ~{plan_duration}s")
+        log(
+            f"Beat sheet ready: {len(visual_plan.get('beats', []))} beats, ~{plan_duration}s"
+        )
 
         # 2) Narration with [BEAT:N] markers → TTS + word timestamps → beat_map
         #    Audio drives the timeline; video is generated to match (no atempo).
@@ -460,10 +497,15 @@ async def process_topic_async(
             visual_plan=visual_plan,
             target_duration=float(plan_duration),
             output_dir=work_dir,
-            model=model,
+            model=NARRATION_MODEL,
             log=log,
         )
-        audio_path, srt_path, audio_duration, beat_map = await generate_audio_with_captions(
+        (
+            audio_path,
+            srt_path,
+            audio_duration,
+            beat_map,
+        ) = await generate_audio_with_captions(
             narration_script,
             output_dir=work_dir,
             log=log,
@@ -472,7 +514,9 @@ async def process_topic_async(
         timed_plan = apply_measured_timings_to_plan(
             visual_plan, beat_map, audio_duration
         )
-        code_duration = int(round(audio_duration)) if audio_duration > 0 else plan_duration
+        code_duration = (
+            int(round(audio_duration)) if audio_duration > 0 else plan_duration
+        )
         log(
             f"Audio {audio_duration:.1f}s → measured {len(beat_map)} beats → "
             f"code target {code_duration}s (voice tempo untouched)"

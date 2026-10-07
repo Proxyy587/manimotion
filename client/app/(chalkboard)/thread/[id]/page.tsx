@@ -15,6 +15,25 @@ import {
 } from "@/lib/prompt";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+type Engine = "auto" | "manim" | "remotion";
+
+const ENGINE_OPTIONS: { value: Engine; label: string; note: string }[] = [
+  { value: "auto", label: "Auto", note: "Routed automatically" },
+  { value: "manim", label: "Manim", note: "Math, equations, LaTeX" },
+  {
+    value: "remotion",
+    label: "Remotion",
+    note: "Charts, timelines, infographics",
+  },
+];
 
 export default function ThreadPage() {
   const params = useParams();
@@ -30,19 +49,28 @@ export default function ThreadPage() {
   const thread = id ? getThread(id) : undefined;
   const autoStarted = useRef(false);
 
-  const prompt =
-    thread?.messages.find((m) => m.role === "user")?.content ?? "";
+  const prompt = thread?.messages.find((m) => m.role === "user")?.content ?? "";
   const [draft, setDraft] = useState(prompt);
+  const [engine, setEngine] = useState<Engine>(thread?.engine ?? "auto");
 
   useEffect(() => {
     setDraft(prompt);
-  }, [prompt, id]);
+    setEngine(thread?.engine ?? "auto");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]); // reset both derived states when the thread id changes
 
   // Starter templates auto-kick the pipeline so the first click always renders.
   useEffect(() => {
     if (!hydrated || !thread || !id || autoStarted.current) return;
     if (!thread.autoStart) return;
-    if (thread.videos.some((v) => v.status === "queued" || v.status === "processing" || v.status === "completed")) {
+    if (
+      thread.videos.some(
+        (v) =>
+          v.status === "queued" ||
+          v.status === "processing" ||
+          v.status === "completed",
+      )
+    ) {
       autoStarted.current = true;
       return;
     }
@@ -69,12 +97,14 @@ export default function ThreadPage() {
   const dirty = draft.trim() !== prompt.trim();
   const canGenerate = draft.trim().length >= PROMPT_MIN_LENGTH;
 
+  const selectedEngine = ENGINE_OPTIONS.find((o) => o.value === engine)!;
+
   return (
     <div className="flex h-full min-h-0 w-full flex-col lg:flex-row">
       <div
         className={cn(
           "flex min-h-0 shrink-0 flex-col border-[var(--chip-line)]",
-          "min-h-[38vh] flex-1 lg:h-full lg:w-[min(380px,40vw)] lg:flex-none lg:border-r"
+          "min-h-[38vh] flex-1 lg:h-full lg:w-[min(380px,40vw)] lg:flex-none lg:border-r",
         )}
       >
         <div className="shrink-0 border-b border-[var(--chip-line)] px-4 py-3">
@@ -134,6 +164,29 @@ export default function ThreadPage() {
               }}
               onDurationChange={(d) => setThreadDuration(id, d)}
             />
+
+            {/* Engine selector */}
+            <div className="flex items-center gap-2">
+              <Select
+                value={engine}
+                onValueChange={(v) => setEngine(v as Engine)}
+              >
+                <SelectTrigger size="sm" className="h-8 min-w-[110px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {ENGINE_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <span className="text-[11px] leading-relaxed text-[var(--muted-2)]">
+                {selectedEngine.note}
+              </span>
+            </div>
+
             <p className="text-[11px] leading-relaxed text-[var(--muted-2)]">
               {getModelLabel(thread.model)}
               {thread.tier === "tier1"
@@ -152,7 +205,7 @@ export default function ThreadPage() {
             await startLectureRender(id, draft, {
               duration: thread.duration,
               tier: thread.tier,
-              engine: thread.engine,
+              engine,
             });
           }}
         />

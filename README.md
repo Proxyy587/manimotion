@@ -1,6 +1,5 @@
-# Clarity Video API — Manim + Remotion
-
-Generate narrated educational videos from a text prompt.
+# Clarity API
+Generate videos from a text prompt.
 
 - **Manim** for math / physics / LaTeX
 - **Remotion** for charts / timelines / modern explainers

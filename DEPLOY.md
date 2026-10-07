@@ -1,4 +1,4 @@
-# Clarity Video Service — Deploy & Integrate Guide
+# Clarity API — Deploy & Integrate Guide
 
 > **Going public with the full product (Vercel web + this worker)?**  
 > Start with **[`client/DEPLOY.md`](./client/DEPLOY.md)** — secrets, Neon, encryption, smoke tests.
@@ -84,6 +84,14 @@ OPENROUTER_API_KEY=sk-or-...
 DEFAULT_MODEL=google/gemini-2.5-flash
 ROUTER_MODEL=openai/gpt-4o-mini
 PLANNER_MODEL=openai/gpt-4o-mini
+
+# Manim reliability (optional)
+MANIM_MAX_ATTEMPTS=3
+# Rotate models per retry (attempt:model, comma-separated; last entry covers later attempts)
+MANIM_ATTEMPT_MODELS=1:google/gemini-2.5-flash,2:google/gemini-2.5-flash,3:openai/gpt-4o
+# Save first-try successes to data/manim_success_examples.jsonl and reuse them as few-shot examples
+MANIM_SAVE_EXAMPLES=1
+# MANIM_EXAMPLES_PATH=/data/manim_success_examples.jsonl
 
 # Cloudflare R2 (S3-compatible)
 R2_ACCOUNT_ID=your_account_id

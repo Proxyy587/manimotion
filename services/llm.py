@@ -28,6 +28,7 @@ load_dotenv()
 _client = OpenRouter(api_key=os.getenv("OPENROUTER_API_KEY"))
 DEFAULT_MODEL = os.getenv("DEFAULT_MODEL", "google/gemini-2.5-flash")
 PLANNER_MODEL = os.getenv("PLANNER_MODEL", "openai/gpt-4o-mini")
+NARRATION_MODEL = os.getenv("NARRATION_MODEL", "google/gemini-2.5-flash")
 JUDGE_MODEL = os.getenv("JUDGE_MODEL", PLANNER_MODEL)
 
 
@@ -227,7 +228,7 @@ def generate_narration_script(
     visual_plan: dict[str, Any],
     target_duration: Optional[float] = None,
     output_dir: str = ".",
-    model: str = DEFAULT_MODEL,
+    model: str = NARRATION_MODEL,
     log=print,
 ) -> str:
     """Polish beat narrations into a [BEAT:N]-marked script for timestamp sync."""
@@ -308,7 +309,13 @@ def generate_manim_code(
         complexity=complexity,
     )
     user_msg += f"\n\n{tier_prompt_block(tier)}"
-    if previous_code:
+    if not error:
+        from services.example_store import get_relevant_examples
+
+        examples = get_relevant_examples(topic)
+        if examples:
+            user_msg += f"\n\n{examples}"
+    if previous_code and not (error and "BROKEN CODE" in error):
         trimmed = (
             previous_code
             if len(previous_code) < 6000

@@ -15,6 +15,7 @@ temp/
 agent-transcripts/
 client/
 remotion-src/node_modules/
+data/*.jsonl
 .env
 *.md
 !DEPLOY.md

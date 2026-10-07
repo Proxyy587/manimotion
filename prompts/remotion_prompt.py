@@ -1,3 +1,5 @@
+from prompts.remotion_few_shot import VERIFIED_REMOTION_EXAMPLE
+
 REMOTION_SYSTEM_PROMPT = """You are a world-class Remotion engineer for STEM / educational motion graphics.
 Generate ONE complete TypeScript React component that ALWAYS compiles on first try.
 
@@ -74,7 +76,8 @@ export const MainComposition: React.FC<{ topic?: string }> = ({ topic }) => {
       </Series>
     </AbsoluteFill>
   );
-};"""
+};
+""" + VERIFIED_REMOTION_EXAMPLE
 
 
 REMOTION_USER_TEMPLATE = """Create a Remotion composition for:
@@ -86,7 +89,15 @@ COMPLEXITY: {complexity}
 BEAT SHEET (one Sequence / Series.Sequence per beat — timing MUST match):
 {visual_plan}
 
-RULES REMINDER: durationInFrames >= 1 always; clamp every interpolate.
+Before the imports, write a short checklist as // comments:
+// CHECKLIST:
+// - Beats -> Series.Sequence count and frames per beat: ...
+// - Components needed (each hook-using piece is its own component): ...
+// - Data arrays (typed, defined outside the component): ...
+// - Imports used (react + remotion only): ...
+
+RULES REMINDER: durationInFrames >= 1 always; clamp every interpolate;
+interpolate input ranges strictly increasing; hooks only at component top level.
 Return ONLY the complete TypeScript component named MainComposition.
 No markdown. No backticks."""
 
@@ -102,4 +113,7 @@ Common Remotion fixes (apply ALL that match):
 - spring frame delay: use Math.max(0, frame - delay)
 - Series.Sequence needs durationInFrames >= 1; Sequence needs from >= 0 + durationInFrames >= 1
 - Prefer simpler AbsoluteFill + text/SVG if previous attempt was too complex
+- inputRange must be strictly monotonically increasing: [d, d + 20], never [d, d] or [20, 0]
+- Invalid hook call: move useCurrentFrame out of .map()/conditions into a child component
+- No Img/Audio/Video/staticFile — there are no asset files; use text, divs, inline SVG
 """

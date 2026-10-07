@@ -1,4 +1,4 @@
-"""Persist first-try Manim successes for few-shot injection (no fine-tuning)."""
+"""Persist first-try codegen successes for few-shot injection (no fine-tuning)."""
 
 from __future__ import annotations
 
@@ -10,12 +10,24 @@ from pathlib import Path
 from typing import Any
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
-_DEFAULT_PATH = _REPO_ROOT / "data" / "manim_success_examples.jsonl"
+_DEFAULT_PATHS = {
+    "manim": _REPO_ROOT / "data" / "manim_success_examples.jsonl",
+    "remotion": _REPO_ROOT / "data" / "remotion_success_examples.jsonl",
+}
+_PATH_ENV = {
+    "manim": "MANIM_EXAMPLES_PATH",
+    "remotion": "REMOTION_EXAMPLES_PATH",
+}
 
 
-def _store_path() -> Path:
-    raw = (os.getenv("MANIM_EXAMPLES_PATH") or "").strip()
-    return Path(raw) if raw else _DEFAULT_PATH
+def _store_path(engine: str) -> Path:
+    raw = (os.getenv(_PATH_ENV.get(engine, "")) or "").strip()
+    return Path(raw) if raw else _DEFAULT_PATHS[engine]
+
+
+def _saving_enabled(engine: str) -> bool:
+    flag = "MANIM_SAVE_EXAMPLES" if engine == "manim" else "REMOTION_SAVE_EXAMPLES"
+    return (os.getenv(flag) or "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _topic_category(topic: str) -> str:
@@ -26,6 +38,10 @@ def _topic_category(topic: str) -> str:
         return "physics"
     if re.search(r"\b(linear|matrix|vector|algebra|equation)\b", t):
         return "algebra"
+    if re.search(r"\b(chart|growth|revenue|market|percent|statistic|data)\b", t):
+        return "data"
+    if re.search(r"\b(timeline|history|process|steps|workflow|pipeline)\b", t):
+        return "process"
     return "general"
 
 
@@ -36,16 +52,9 @@ def save_successful_example(
     attempt: int = 1,
     engine: str = "manim",
 ) -> None:
-    if attempt != 1 or engine != "manim":
+    if attempt != 1 or engine not in _DEFAULT_PATHS or not _saving_enabled(engine):
         return
-    if (os.getenv("MANIM_SAVE_EXAMPLES") or "").strip().lower() not in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }:
-        return
-    path = _store_path()
+    path = _store_path(engine)
     path.parent.mkdir(parents=True, exist_ok=True)
     row = {
         "topic": topic[:500],
@@ -57,8 +66,10 @@ def save_successful_example(
         f.write(json.dumps(row, ensure_ascii=False) + "\n")
 
 
-def get_relevant_examples(topic: str, *, limit: int = 2) -> str:
-    path = _store_path()
+def get_relevant_examples(topic: str, *, limit: int = 2, engine: str = "manim") -> str:
+    if engine not in _DEFAULT_PATHS:
+        return ""
+    path = _store_path(engine)
     if not path.is_file():
         return ""
     category = _topic_category(topic)
@@ -81,7 +92,8 @@ def get_relevant_examples(topic: str, *, limit: int = 2) -> str:
     pool = list(reversed(pool))[:limit]
     if not pool:
         return ""
+    comment = "#" if engine == "manim" else "//"
     parts = ["PREVIOUSLY SUCCESSFUL CODE FOR SIMILAR TOPICS (patterns only):"]
     for r in pool:
-        parts.append(f"# Topic: {r.get('topic', '')}\n{r.get('code', '')[:4000]}")
+        parts.append(f"{comment} Topic: {r.get('topic', '')}\n{r.get('code', '')[:4000]}")
     return "\n---\n".join(parts)

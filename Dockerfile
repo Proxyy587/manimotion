@@ -51,9 +51,9 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev \
     && /app/.venv/bin/python -c "import cryptography, psycopg; print('deps-ok')"
 
-# Remotion deps
+# Remotion deps (dev deps included: typescript powers the pre-render tsc check)
 COPY remotion-src/package.json remotion-src/
-RUN cd remotion-src && npm install --omit=dev
+RUN cd remotion-src && npm install
 
 # App source
 COPY . .

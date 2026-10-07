@@ -14,4 +14,10 @@ services:
       - MANIM_QUALITY=${MANIM_QUALITY:-medium}
     # Do NOT bind-mount ./outputs on VPS — that fills the host disk.
     # Jobs use /tmp/clarity-jobs and are wiped after R2 upload.
+    volumes:
+      # Saved first-try successes (few-shot examples) survive rebuilds.
+      - clarity-data:/app/data
     restart: unless-stopped
+
+volumes:
+  clarity-data:

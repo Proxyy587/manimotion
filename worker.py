@@ -286,7 +286,18 @@ async def _run_remotion_pipeline(
     output_dir: str,
     max_attempts: int = 3,
 ) -> tuple[Optional[str], Optional[str]]:
+    from services.example_store import save_successful_example
     from services.llm import judge_generated_code, quality_judge_enabled
+    from services.manim_attempt_models import get_model_for_remotion_attempt
+    from services.remotion_error_parser import (
+        build_remotion_retry_prompt,
+        parse_remotion_error,
+    )
+    from services.remotion_templates import build_guaranteed_remotion_code
+    from services.remotion_validator import (
+        typecheck_remotion_code,
+        validate_remotion_code,
+    )
 
     last_error = None
     previous_code = None
@@ -306,13 +317,15 @@ async def _run_remotion_pipeline(
                 "Honor BEAT start_s / duration_sec from the sheet.\n"
                 f"Original plan intent (simplify heavily):\n{plan_text[:1200]}"
             )
+        attempt_model = get_model_for_remotion_attempt(attempt, model)
         log(
-            f"\n🧠 Remotion attempt {attempt}/{max_attempts} (complexity={attempt_complexity})"
+            f"\n🧠 Remotion attempt {attempt}/{max_attempts} "
+            f"(complexity={attempt_complexity}, model={attempt_model})"
         )
         try:
             code = generate_remotion_code(
                 topic=topic,
-                model=model,
+                model=attempt_model,
                 visual_plan=attempt_plan,
                 duration=duration,
                 complexity=attempt_complexity,
@@ -345,6 +358,20 @@ async def _run_remotion_pipeline(
                 continue
 
         previous_code = code
+        problems = validate_remotion_code(code) or typecheck_remotion_code(code)
+        if problems:
+            for p in problems[:5]:
+                log(f"     • {p}")
+            log("  ❌ Remotion pre-check failed — skipping render, regenerating...")
+            last_error = build_remotion_retry_prompt(
+                attempt=attempt,
+                max_attempts=max_attempts,
+                broken_code=code,
+                stderr="Pre-render check failed:\n" + "\n".join(problems),
+                topic=topic,
+            )
+            continue
+
         video, err = render_remotion(
             tsx_code=code,
             job_id=f"{job_id}_{attempt}",
@@ -353,9 +380,31 @@ async def _run_remotion_pipeline(
             log=log,
         )
         if video:
+            save_successful_example(topic, code, attempt=attempt, engine="remotion")
             return video, None
-        last_error = err
-        log("🔁 Remotion render failed — retrying with error context...")
+        info = parse_remotion_error(err or "")
+        last_error = build_remotion_retry_prompt(
+            attempt=attempt,
+            max_attempts=max_attempts,
+            broken_code=code,
+            stderr=err or "",
+            topic=topic,
+        )
+        log(f"🔁 Remotion render failed ({info.get('type')}): {info.get('message')}")
+        if info.get("fix_hint"):
+            log(f"   💡 {info['fix_hint'][:200]}")
+
+    log("\n🛟 All Remotion attempts failed — rendering guaranteed fallback template")
+    video, err = render_remotion(
+        tsx_code=build_guaranteed_remotion_code(topic, visual_plan),
+        job_id=f"{job_id}_fallback",
+        duration=duration,
+        output_dir=output_dir,
+        log=log,
+    )
+    if video:
+        return video, None
+    log(f"  ❌ Fallback template failed: {(err or '')[:300]}")
     return None, last_error or "Remotion failed after all attempts"
 
 

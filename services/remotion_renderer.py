@@ -177,13 +177,26 @@ def render_remotion(
     os.makedirs(output_dir, exist_ok=True)
     compositions_dir = os.path.join(REMOTION_SRC, "src", "compositions")
     job_comp_dir = os.path.join(compositions_dir, f"job_{job_id}")
-    os.makedirs(job_comp_dir, exist_ok=True)
-
     try:
         tsx_code = _sanitize_tsx(tsx_code)
     except Exception as e:
         return None, str(e)
 
+    os.makedirs(job_comp_dir, exist_ok=True)
+    try:
+        return _render_job(tsx_code, job_id, job_comp_dir, duration, output_dir, log)
+    finally:
+        _restore_root(job_comp_dir)
+
+
+def _render_job(
+    tsx_code: str,
+    job_id: str,
+    job_comp_dir: str,
+    duration: int,
+    output_dir: str,
+    log,
+) -> tuple[Optional[str], Optional[str]]:
     component_path = os.path.join(job_comp_dir, "MainComposition.tsx")
     with open(component_path, "w", encoding="utf-8") as f:
         f.write(tsx_code)
@@ -265,11 +278,22 @@ export const RemotionRoot: React.FC = () => {{
     if not os.path.exists(output_path):
         return None, "Remotion finished but output mp4 was not found"
 
-    # Restore stable Root so the IDE/linters don't point at deleted job folders.
+    log(f"  ✔️ Remotion video at {output_path}")
+    return output_path, None
+
+
+def _restore_root(job_comp_dir: str) -> None:
+    """Point Root.tsx back at a stable composition and drop the job folder."""
+    root_path = os.path.join(REMOTION_SRC, "src", "Root.tsx")
     try:
         with open(root_path, "w", encoding="utf-8") as f:
-            f.write(
-                """import React from 'react';
+            f.write(_STABLE_ROOT)
+    except OSError:
+        pass
+    shutil.rmtree(job_comp_dir, ignore_errors=True)
+
+
+_STABLE_ROOT = """import React from 'react';
 import {AbsoluteFill, Composition, interpolate, useCurrentFrame} from 'remotion';
 
 const FallbackComposition: React.FC<{topic?: string}> = ({topic}) => {
@@ -308,10 +332,3 @@ export const RemotionRoot: React.FC = () => {
   );
 };
 """
-            )
-        shutil.rmtree(job_comp_dir, ignore_errors=True)
-    except Exception:
-        pass
-
-    log(f"  ✔️ Remotion video at {output_path}")
-    return output_path, None

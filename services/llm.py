@@ -324,7 +324,7 @@ def generate_manim_code(
         user_msg += f"\n\nPREVIOUS ATTEMPT:\n{trimmed}"
     if error:
         # error may already be a structured block from manim_error_parser
-        err_block = error if len(error) < 4000 else error[-4000:]
+        err_block = error if len(error) < 10000 else error[-10000:]
         user_msg += f"\n\nRENDER ERROR TO FIX:\n{err_block}\n{MANIM_ERROR_HINTS}"
         if force_safe_tmt or "TransformMatchingTex" in error:
             user_msg += (
@@ -380,10 +380,17 @@ def generate_remotion_code(
         complexity=complexity,
         visual_plan=plan_text,
     )
-    if previous_code:
+    if not error:
+        from services.example_store import get_relevant_examples
+
+        examples = get_relevant_examples(topic, engine="remotion")
+        if examples:
+            user_msg += f"\n\n{examples}"
+    if previous_code and not (error and "BROKEN CODE" in error):
         user_msg += f"\n\nPREVIOUS ATTEMPT:\n{previous_code[:6000]}"
     if error:
-        user_msg += f"\n\nRENDER ERROR TO FIX:\n{error[-2500:]}\n{REMOTION_ERROR_HINTS}"
+        err_block = error if len(error) < 10000 else error[-10000:]
+        user_msg += f"\n\nRENDER ERROR TO FIX:\n{err_block}\n{REMOTION_ERROR_HINTS}"
 
     response = _client.chat.send(
         model=model,

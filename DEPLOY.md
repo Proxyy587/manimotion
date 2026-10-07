@@ -93,6 +93,11 @@ MANIM_ATTEMPT_MODELS=1:google/gemini-2.5-flash,2:google/gemini-2.5-flash,3:opena
 MANIM_SAVE_EXAMPLES=1
 # MANIM_EXAMPLES_PATH=/data/manim_success_examples.jsonl
 
+# Remotion reliability (optional, same format as the Manim settings)
+REMOTION_ATTEMPT_MODELS=1:google/gemini-2.5-flash,2:google/gemini-2.5-flash,3:openai/gpt-4o
+REMOTION_SAVE_EXAMPLES=1
+# REMOTION_EXAMPLES_PATH=/data/remotion_success_examples.jsonl
+
 # Cloudflare R2 (S3-compatible)
 R2_ACCOUNT_ID=your_account_id
 R2_BUCKET_NAME=manim-video

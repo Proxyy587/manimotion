@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { unauthorized } from "@/lib/api/schemas";
 import { requireCurrentUser } from "@/lib/auth/session";
+import { publicSubscriptionStatus } from "@/lib/billing/status";
 import { db } from "@/lib/db";
 
 export async function GET() {
@@ -25,7 +26,7 @@ export async function GET() {
   return NextResponse.json({
     plan: row?.plan ?? "FREE",
     renderCredits: row?.renderCredits ?? 0,
-    subscriptionStatus: row?.subscriptionStatus ?? null,
+    subscriptionStatus: publicSubscriptionStatus(row?.subscriptionStatus),
     billingPeriod: row?.billingPeriod ?? null,
   });
 }

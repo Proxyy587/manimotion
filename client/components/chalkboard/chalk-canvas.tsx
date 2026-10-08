@@ -24,10 +24,10 @@ type PipelineStep = {
 };
 
 const PIPELINE: PipelineStep[] = [
-  { key: "planning", label: "Planning animation" },
+  { key: "planning", label: "Planning the lesson" },
   { key: "generating_audio", label: "Generating narration" },
-  { key: "generating_code", label: "Writing animation code" },
-  { key: "merging", label: "Rendering & combining" },
+  { key: "generating_code", label: "Designing visuals" },
+  { key: "merging", label: "Finishing touches" },
   { key: "uploading", label: "Uploading" },
 ];
 

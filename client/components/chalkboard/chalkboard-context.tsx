@@ -28,6 +28,7 @@ import type {
   ThreadMessage,
   ThreadVideo,
   ThreadVideoStatus,
+  VideoStyle,
 } from "@/lib/chalkboard-types";
 import { normalizeThread, STORAGE_KEY } from "@/lib/chalkboard-types";
 import {
@@ -112,7 +113,7 @@ type ChalkboardContextValue = {
       model?: string;
       duration?: number;
       tier?: "tier1" | "tier2" | "tier3";
-      engine?: "auto" | "manim" | "remotion";
+      style?: VideoStyle;
       autoStart?: boolean;
     }
   ) => string;
@@ -123,7 +124,7 @@ type ChalkboardContextValue = {
   startLectureRender: (
     threadId: string,
     promptOverride?: string,
-    opts?: { duration?: number; tier?: "tier1" | "tier2" | "tier3"; engine?: "auto" | "manim" | "remotion" }
+    opts?: { duration?: number; tier?: "tier1" | "tier2" | "tier3"; style?: VideoStyle }
   ) => Promise<void>;
 };
 
@@ -192,10 +193,7 @@ export function ChalkboardProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!hydrated || sessionPending) return;
 
-    if (!signedIn || !userId) {
-      setSynced(true);
-      return;
-    }
+    if (!signedIn || !userId) return;
 
     let cancelled = false;
 
@@ -311,7 +309,7 @@ export function ChalkboardProvider({ children }: { children: ReactNode }) {
         model?: string;
         duration?: number;
         tier?: "tier1" | "tier2" | "tier3";
-        engine?: "auto" | "manim" | "remotion";
+        style?: VideoStyle;
         autoStart?: boolean;
       }
     ) => {
@@ -331,7 +329,7 @@ export function ChalkboardProvider({ children }: { children: ReactNode }) {
         model: opts?.model?.trim() || DEFAULT_LECTURE_MODEL,
         duration: opts?.duration,
         tier: opts?.tier,
-        engine: opts?.engine,
+        style: opts?.style,
         autoStart: Boolean(opts?.autoStart),
         updatedAt: now,
       };
@@ -456,7 +454,7 @@ export function ChalkboardProvider({ children }: { children: ReactNode }) {
       opts?: {
         duration?: number;
         tier?: "tier1" | "tier2" | "tier3";
-        engine?: "auto" | "manim" | "remotion";
+        style?: VideoStyle;
       }
     ) => {
       const override = promptOverride?.trim();
@@ -485,7 +483,7 @@ export function ChalkboardProvider({ children }: { children: ReactNode }) {
       const duration =
         opts && "duration" in opts ? opts.duration : live.duration;
       const tier = opts?.tier ?? live.tier;
-      const engine = opts?.engine ?? live.engine ?? "auto";
+      const style = opts?.style ?? live.style ?? "auto";
 
       const videoId = uid();
       const placeholder: ThreadVideo = {
@@ -522,7 +520,7 @@ export function ChalkboardProvider({ children }: { children: ReactNode }) {
         const data = await createLectureJob(messages, model, {
           duration,
           tier,
-          engine,
+          style,
         });
         patchVideo(threadId, videoId, {
           jobId: data.job_id,
@@ -594,7 +592,7 @@ export function ChalkboardProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     (): ChalkboardContextValue => ({
       hydrated: hydrated && (sessionPending ? false : !signedIn || synced),
-      synced,
+      synced: !signedIn || synced,
       threadsById,
       threadIdsSorted,
       getThread,

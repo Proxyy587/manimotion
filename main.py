@@ -23,6 +23,7 @@ from services.quota import (
     plan_wants_watermark,
 )
 from services.llm import DEFAULT_MODEL
+from services.public_api import engine_for_style, public_error, public_style
 from services.quality_tiers import estimate_job, status_payload
 from services.storage_resolver import ResolvedStorage, resolve_job_storage
 from services.user_storage import UserStorageConfig
@@ -196,11 +197,10 @@ def _run_job(
             )
         )
         if not result or not result.get("ok") or not result.get("video_url"):
-            JOBS[job_id]["status"] = "failed"
-            JOBS[job_id]["error"] = (result or {}).get("error") or "Video generation failed."
-            JOBS[job_id]["engine"] = (result or {}).get("engine")
+            _fail_job(job_id, (result or {}).get("error"))
             return
 
+        JOBS[job_id].update(status_payload("completed", tier))
         JOBS[job_id]["status"] = "completed"
         JOBS[job_id]["video_url"] = result["video_url"]
         JOBS[job_id]["engine"] = result.get("engine")
@@ -216,8 +216,15 @@ def _run_job(
             "created_at": time.time(),
         }
     except Exception as exc:
-        JOBS[job_id]["status"] = "failed"
-        JOBS[job_id]["error"] = str(exc)
+        _fail_job(job_id, str(exc))
+
+
+def _fail_job(job_id: str, detail: str | None) -> None:
+    """Keep the full failure in logs; API callers get a short, actionable message."""
+    print(f"  ❌ Job {job_id} failed: {detail or 'unknown error'}", flush=True)
+    JOBS[job_id]["status"] = "failed"
+    JOBS[job_id].update(status_payload("failed", JOBS[job_id].get("tier")))
+    JOBS[job_id]["error"] = public_error(detail)
 
 
 def _enqueue(
@@ -233,7 +240,6 @@ def _enqueue(
     tier: str | None = None,
 ) -> JobCreateResponse:
     model = (model or DEFAULT_MODEL).strip() or DEFAULT_MODEL
-    engine = (engine or "auto").strip().lower() or "auto"
     resolved = resolved or ResolvedStorage("platform", None)
     job_storage = resolved.config
     use_platform_storage = resolved.use_platform
@@ -278,7 +284,7 @@ def _enqueue(
             status="completed",
             cached=True,
             video_url=hit["video_url"],
-            engine=hit.get("engine"),
+            style=public_style(hit.get("engine")),
             eta_seconds=0,
             eta_display=est["eta_display"],
             message="Done!",
@@ -323,7 +329,7 @@ def _enqueue(
         status="queued",
         cached=False,
         video_url=None,
-        engine=None,
+        style=None,
         eta_seconds=est["eta_seconds"],
         eta_display=est["eta_display"],
         message=queued_meta["message"],
@@ -364,7 +370,7 @@ def _enforce_user_key_quota(auth: dict | None):
 @app.get("/")
 async def root():
     return {
-        "service": "Clarity Video API",
+        "service": "manimotion Video API",
         "docs": "/docs",
         "health": "/health",
         "endpoints": {
@@ -399,7 +405,7 @@ async def request_video(req: VideoRequest, http_request: Request):
     return _enqueue(
         topic=req.prompt.strip(),
         model=req.model or DEFAULT_MODEL,
-        engine=req.engine or "auto",
+        engine=engine_for_style(req.style, req.engine),
         duration=req.duration,
         user_id=user_id,
         resolved=resolved,
@@ -423,7 +429,7 @@ async def video_status(job_id: str, http_request: Request):
         video_url=job.get("video_url"),
         error=job.get("error"),
         cached=job.get("cached", False),
-        engine=job.get("engine"),
+        style=public_style(job.get("engine")),
         duration=job.get("duration"),
         phase=job.get("phase"),
         message=job.get("message"),
@@ -446,7 +452,7 @@ async def generate_chalks(request: ChatRequest, http_request: Request):
     return _enqueue(
         topic=topic,
         model=request.model or DEFAULT_MODEL,
-        engine=request.engine or "auto",
+        engine=engine_for_style(request.style, request.engine),
         duration=request.duration,
         user_id=user_id,
         resolved=resolved,

@@ -7,6 +7,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { getPlan, PLANS, PLAN_RANK } from "@/lib/billing/plans";
+import { subscriptionStatusLabel } from "@/lib/billing/status";
 import { LECTURE_MODELS } from "@/lib/chalkboard-api";
 import { readJsonSafe } from "@/lib/http";
 
@@ -143,6 +144,7 @@ function BillingInner() {
     "FREE" | "HOBBY" | "PRO";
   const planRank = PLAN_RANK[planId] ?? 0;
   const isFree = planId === "FREE";
+  const statusLabel = subscriptionStatusLabel(me?.subscriptionStatus);
 
   const quota = isFree ? (plan.dailyRenders ?? 3) : (plan.monthlyRenders ?? 0);
   const used = quota - (me?.renderCredits ?? 0);
@@ -218,14 +220,12 @@ function BillingInner() {
                   "rounded-[6px] px-2 py-0.5 text-[11px] font-semibold tracking-[0.04em]",
                   isFree
                     ? "border border-[var(--chip-line)] bg-[var(--chip)] text-[var(--muted-text)]"
-                    : me.subscriptionStatus === "active"
+                    : !statusLabel
                       ? "border border-emerald-500/30 bg-emerald-500/8 text-emerald-600 dark:text-emerald-400"
                       : "border border-yellow-500/30 bg-yellow-500/8 text-yellow-600 dark:text-yellow-400",
                 ].join(" ")}
               >
-                {isFree
-                  ? "FREE"
-                  : (me.subscriptionStatus?.toUpperCase() ?? "ACTIVE")}
+                {isFree ? "FREE" : (statusLabel ?? "Active").toUpperCase()}
               </span>
             </div>
             <p className="mt-2 text-[1.5rem] font-bold leading-none tracking-tight text-foreground">
@@ -235,9 +235,7 @@ function BillingInner() {
               {plan.priceUsd === 0
                 ? "Free forever"
                 : `${plan.priceLabel} / month`}
-              {me.subscriptionStatus && me.subscriptionStatus !== "active"
-                ? ` · ${me.subscriptionStatus}`
-                : ""}
+              {statusLabel ? ` · ${statusLabel}` : ""}
             </p>
           </div>
 

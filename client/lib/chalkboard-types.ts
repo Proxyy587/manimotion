@@ -41,13 +41,32 @@ export type Thread = {
   duration?: number;
   /** Quality/speed tier: tier1 | tier2 | tier3 */
   tier?: "tier1" | "tier2" | "tier3";
-  engine?: "auto" | "manim" | "remotion";
+  style?: VideoStyle;
   /** When true, thread page starts a render once on mount. */
   autoStart?: boolean;
   updatedAt: number;
 };
 
 export const STORAGE_KEY = "chalkboard-threads-v2";
+
+/** Visual style of a video: equations & graphs, or charts & explainers. */
+export type VideoStyle = "auto" | "math" | "graphics";
+
+export const STYLE_OPTIONS: { value: VideoStyle; label: string; hint: string }[] = [
+  { value: "auto", label: "Auto", hint: "Best fit for the topic" },
+  { value: "math", label: "Math", hint: "Equations, graphs, proofs" },
+  { value: "graphics", label: "Graphics", hint: "Charts, timelines, explainers" },
+];
+
+const LEGACY_STYLE: Record<string, VideoStyle> = {
+  manim: "math",
+  remotion: "graphics",
+};
+
+export function normalizeStyle(raw: unknown): VideoStyle | undefined {
+  if (raw === "auto" || raw === "math" || raw === "graphics") return raw;
+  return typeof raw === "string" ? LEGACY_STYLE[raw] : undefined;
+}
 
 /** Best-effort migration from older persisted shapes. */
 export function normalizeThread(raw: unknown): Thread | null {
@@ -74,10 +93,7 @@ export function normalizeThread(raw: unknown): Thread | null {
       t.tier === "tier1" || t.tier === "tier2" || t.tier === "tier3"
         ? t.tier
         : undefined,
-    engine:
-      t.engine === "auto" || t.engine === "manim" || t.engine === "remotion"
-        ? t.engine
-        : undefined,
+    style: normalizeStyle(t.style ?? (raw as { engine?: unknown }).engine),
     autoStart: Boolean(t.autoStart),
     updatedAt: typeof t.updatedAt === "number" ? t.updatedAt : Date.now(),
   };

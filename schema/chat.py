@@ -1,6 +1,7 @@
 from typing import List, Optional
 
 from pydantic import BaseModel, Field
+from pydantic.json_schema import SkipJsonSchema
 
 from schema.storage import VideoStorageRequest
 
@@ -15,7 +16,8 @@ class ChatRequest(BaseModel):
 
     messages: List[Message]
     model: Optional[str] = "deepseek/deepseek-v3.2"
-    engine: Optional[str] = "auto"
+    style: Optional[str] = Field(default=None, description="auto (default) | math | graphics")
+    engine: SkipJsonSchema[Optional[str]] = None  # legacy alias of style
     duration: Optional[int] = Field(
         default=None,
         ge=15,
@@ -34,7 +36,11 @@ class VideoRequest(BaseModel):
         description="Lecture topic / prompt (10–2000 chars).",
     )
     model: Optional[str] = "deepseek/deepseek-v3.2"
-    engine: Optional[str] = Field(default="auto", description="auto | manim | remotion")
+    style: Optional[str] = Field(
+        default=None,
+        description="auto (default) | math (equations, graphs) | graphics (charts, timelines, explainers)",
+    )
+    engine: SkipJsonSchema[Optional[str]] = None  # legacy alias of style
     duration: Optional[int] = Field(
         default=None,
         ge=15,
@@ -67,7 +73,7 @@ class JobCreateResponse(BaseModel):
     status: str
     cached: bool = False
     video_url: Optional[str] = None
-    engine: Optional[str] = None
+    style: Optional[str] = None
     eta_seconds: Optional[int] = None
     eta_display: Optional[str] = None
     message: Optional[str] = None
@@ -80,7 +86,7 @@ class JobStatusResponse(BaseModel):
     video_url: Optional[str] = None
     error: Optional[str] = None
     cached: bool = False
-    engine: Optional[str] = None
+    style: Optional[str] = None
     duration: Optional[float] = None
     phase: Optional[str] = None
     message: Optional[str] = None

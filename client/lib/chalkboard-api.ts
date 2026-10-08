@@ -1,5 +1,6 @@
 import type { PlanId } from "@/lib/billing/plans";
 import { PLAN_RANK } from "@/lib/billing/plans";
+import type { VideoStyle } from "@/lib/chalkboard-types";
 
 /** Matches `worker.DEFAULT_MODEL` / `schema.chat.ChatRequest`. */
 export const DEFAULT_LECTURE_MODEL = "google/gemini-2.5-flash";
@@ -47,7 +48,7 @@ export const LECTURE_MODELS: LectureModelOption[] = [
   {
     id: "anthropic/claude-3.5-sonnet",
     label: "Claude 3.5 Sonnet",
-    hint: "Best Manim quality · Hobby+",
+    hint: "Highest quality · Hobby+",
     minPlan: "HOBBY",
     badge: "Best quality",
   },
@@ -171,7 +172,7 @@ export type JobStatusResponse = {
   video_url?: string | null;
   error?: string | null;
   cached?: boolean;
-  engine?: string | null;
+  style?: string | null;
   duration?: number | null;
   phase?: string | null;
   message?: string | null;
@@ -207,7 +208,7 @@ export async function createLectureJob(
   messages: ApiMessage[],
   model: string,
   opts?: {
-    engine?: "auto" | "manim" | "remotion";
+    style?: VideoStyle;
     duration?: number;
     tier?: "tier1" | "tier2" | "tier3";
     storage?: { integration_id?: string; inline?: Record<string, unknown> };
@@ -227,7 +228,7 @@ export async function createLectureJob(
   const body: Record<string, unknown> = {
     prompt,
     model: model.trim() || DEFAULT_LECTURE_MODEL,
-    engine: opts?.engine ?? "auto",
+    style: opts?.style ?? "auto",
   };
   if (opts?.duration != null) body.duration = opts.duration;
   if (opts?.tier) body.tier = opts.tier;

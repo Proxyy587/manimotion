@@ -9,7 +9,7 @@ export const CREATE_JOB = {
   -H "x-api-key: $MANIMOTION_KEY" \\
   -d '{
     "prompt": "Explain Bayes theorem with a medical testing example",
-    "engine": "auto",
+    "style": "auto",
     "storage": {
       "inline": {
         "provider": "r2",
@@ -29,7 +29,7 @@ export const CREATE_JOB = {
   },
   body: JSON.stringify({
     prompt: "Explain Bayes theorem with a medical testing example",
-    engine: "auto",
+    style: "auto",
     storage: {
       inline: {
         provider: "r2",
@@ -58,7 +58,7 @@ r = requests.post(
     },
     json={
         "prompt": "Explain Bayes theorem with a medical testing example",
-        "engine": "auto",
+        "style": "auto",
         "storage": {
             "inline": {
                 "provider": "r2",
@@ -79,7 +79,7 @@ export const CREATE_JOB_RESPONSE = `{
   "status": "queued",
   "cached": false,
   "video_url": null,
-  "engine": null
+  "style": null
 }`;
 
 export const POLL_STATUS = {
@@ -106,7 +106,7 @@ export const POLL_COMPLETED_RESPONSE = `{
   "video_url": "https://cdn.example.com/videos/a1b2c3d4.mp4",
   "error": null,
   "cached": false,
-  "engine": "manim",
+  "style": "math",
   "duration": 54.2
 }`;
 
@@ -114,9 +114,9 @@ export const POLL_FAILED_RESPONSE = `{
   "job_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "status": "failed",
   "video_url": null,
-  "error": "Render timed out after 3 retries",
+  "error": "We couldn't create this video. Try rephrasing the topic or making it more specific.",
   "cached": false,
-  "engine": "remotion",
+  "style": "graphics",
   "duration": null
 }`;
 
@@ -159,7 +159,7 @@ async function generate(prompt) {
     },
     body: JSON.stringify({
       prompt,
-      engine: "auto",
+      style: "auto",
       storage: {
         inline: {
           provider: "r2",
@@ -349,7 +349,7 @@ export const STORAGE_MINIO = {
   -H "x-api-key: $MANIMOTION_KEY" \\
   -d '{
     "prompt": "Timeline of the industrial revolution",
-    "engine": "remotion",
+    "style": "graphics",
     "storage": {
       "inline": {
         "provider": "minio",
@@ -371,7 +371,7 @@ export const STORAGE_MINIO = {
   },
   body: JSON.stringify({
     prompt: "Timeline of the industrial revolution",
-    engine: "remotion",
+    style: "graphics",
     storage: {
       inline: {
         provider: "minio",
@@ -391,7 +391,7 @@ export const STORAGE_MINIO = {
     headers={"Content-Type": "application/json", "x-api-key": KEY},
     json={
         "prompt": "Timeline of the industrial revolution",
-        "engine": "remotion",
+        "style": "graphics",
         "storage": {
             "inline": {
                 "provider": "minio",

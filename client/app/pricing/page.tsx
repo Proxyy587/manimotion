@@ -45,7 +45,7 @@ const FAQ_ITEMS = [
   },
   {
     q: "What's the difference between models?",
-    a: "Free-tier models (Gemini Flash, DeepSeek) are fast but occasionally produce Manim code with errors on complex topics. Hobby and Pro models (GPT-4o, Claude 3.5 Sonnet, Claude Opus 4) generate cleaner Manim code with noticeably fewer failures.",
+    a: "Free-tier models (Gemini Flash, DeepSeek) are fast but occasionally fail on complex topics. Hobby and Pro models (GPT-4o, Claude 3.5 Sonnet, Claude Opus 4) produce richer visuals with noticeably fewer failures.",
   },
 ];
 
@@ -114,8 +114,8 @@ export default function PricingPage() {
       </h1>
       <p className="mt-3 max-w-2xl text-[14px] leading-relaxed text-[var(--muted-text)]">
         Free includes full API access with fast open models. Hobby and Pro
-        unlock stronger LLMs — Claude Sonnet and Opus generate cleaner Manim
-        code with fewer errors.
+        unlock stronger models — Claude Sonnet and Opus produce richer visuals
+        with fewer failures.
       </p>
 
       {/* Plan cards */}

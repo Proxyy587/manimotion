@@ -1,12 +1,13 @@
 """
-Beat-locked A/V sync for Manim renders.
+Beat-locked A/V sync for generated scenes.
 
-1. `instrument_beat_marks` turns every `# BEAT N` comment into a call that records
-   the scene clock (`renderer.time`) when that beat starts. Line numbers are kept
-   identical so tracebacks still point at the LLM's code.
-2. After rendering, `retime_to_beats` maps each video beat segment onto the
-   narration's measured beat window (gentle speed change + hold), so every slide
-   change lands exactly when the narrator starts talking about it.
+1. `instrument_beat_marks` turns every `# BEAT N` comment into a beat mark and
+   appends the timing harness (services/scene_harness.py). Line numbers are kept
+   identical so tracebacks still point at the generated code.
+2. A fast measure pass reports how long each beat animates; `compute_beat_scales`
+   turns that into per-beat stretch / pad values so each beat fills its narration.
+3. After the real render, `retime_to_beats` fixes any residual drift with ffmpeg
+   so every beat lands exactly when the narrator starts talking about it.
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ import json
 import os
 import re
 import subprocess
+from pathlib import Path
 from typing import Any, Callable, Optional
 
 MARKS_ENV = "CLARITY_BEAT_MARKS"
@@ -23,127 +25,7 @@ _BEAT_COMMENT = re.compile(r"^(?P<indent>[ \t]*)#\s*BEAT\s+(?P<id>[A-Za-z0-9_]+)
 _BLOCK_CONTINUATION = re.compile(r"^\s*(else|elif|except|finally)\b")
 
 SCALES_ENV = "CLARITY_BEAT_SCALES"
-
-# Appended to the scene file. Patches manim's Scene.play/wait to:
-#  - record the scene clock when each beat's first animation starts
-#  - record per-beat wait time (static holds)
-#  - apply per-beat time scales (CLARITY_BEAT_SCALES) so motion fills narration
-# Stats are dumped as JSON to CLARITY_BEAT_MARKS at process exit.
-_MARK_HELPER = '''
-
-import atexit as _clarity_atexit
-import json as _clarity_json
-import os as _clarity_os
-
-import manim as _clarity_manim
-
-_CLARITY = {
-    "beat": "_pre",
-    "pending": None,
-    "in_wait": False,
-    "marks": {},
-    "waits": {},
-    "wait_list": {},
-    "end": 0.0,
-    "scales": {},
-}
-try:
-    _CLARITY["scales"] = _clarity_json.loads(_clarity_os.environ.get("CLARITY_BEAT_SCALES") or "{}")
-except Exception:
-    pass
-
-
-def _clarity_mark(beat_id):
-    key = str(beat_id)
-    if key not in _CLARITY["marks"]:
-        _CLARITY["beat"] = key
-        _CLARITY["pending"] = key
-
-
-def _clarity_scale(kind):
-    try:
-        return float(_CLARITY["scales"].get(_CLARITY["beat"], {}).get(kind, 1.0))
-    except Exception:
-        return 1.0
-
-
-def _clarity_base_run_time(args, kwargs):
-    rt = kwargs.get("run_time")
-    if isinstance(rt, (int, float)):
-        return float(rt)
-    base = 0.0
-    for a in args:
-        attrs = getattr(a, "__dict__", {})
-        if "anim_args" in attrs:  # mob.animate builder
-            val = attrs["anim_args"].get("run_time")
-        else:
-            val = getattr(a, "run_time", None)
-        base = max(base, float(val) if isinstance(val, (int, float)) else 1.0)
-    return base or 1.0
-
-
-_clarity_orig_play = _clarity_manim.Scene.play
-_clarity_orig_wait = _clarity_manim.Scene.wait
-
-
-def _clarity_play(self, *args, **kwargs):
-    try:
-        if _CLARITY["pending"] is not None:
-            _CLARITY["marks"][_CLARITY["pending"]] = float(self.renderer.time)
-            _CLARITY["pending"] = None
-        if not _CLARITY["in_wait"] and args:
-            s = _clarity_scale("play")
-            if abs(s - 1.0) > 1e-3:
-                kwargs["run_time"] = max(1 / 30, _clarity_base_run_time(args, kwargs) * s)
-    except Exception:
-        pass
-    result = _clarity_orig_play(self, *args, **kwargs)
-    try:
-        _CLARITY["end"] = float(self.renderer.time)
-    except Exception:
-        pass
-    return result
-
-
-def _clarity_wait(self, duration=1.0, *args, **kwargs):
-    try:
-        d = float(duration) * _clarity_scale("wait")
-        d = max(1 / 30, d)
-        beat = _CLARITY["beat"]
-        _CLARITY["waits"][beat] = _CLARITY["waits"].get(beat, 0.0) + d
-        _CLARITY["wait_list"].setdefault(beat, []).append(round(d, 3))
-    except Exception:
-        d = duration
-    _CLARITY["in_wait"] = True
-    try:
-        return _clarity_orig_wait(self, d, *args, **kwargs)
-    finally:
-        _CLARITY["in_wait"] = False
-
-
-def _clarity_dump():
-    path = _clarity_os.environ.get("CLARITY_BEAT_MARKS")
-    if not path:
-        return
-    try:
-        with open(path, "w") as fh:
-            _clarity_json.dump(
-                {
-                    "marks": _CLARITY["marks"],
-                    "waits": _CLARITY["waits"],
-                    "wait_list": _CLARITY["wait_list"],
-                    "end": _CLARITY["end"],
-                },
-                fh,
-            )
-    except Exception:
-        pass
-
-
-_clarity_manim.Scene.play = _clarity_play
-_clarity_manim.Scene.wait = _clarity_wait
-_clarity_atexit.register(_clarity_dump)
-'''
+_HARNESS_SOURCE = (Path(__file__).with_name("scene_harness.py")).read_text(encoding="utf-8")
 
 
 def _next_code_line(lines: list[str], start: int) -> Optional[str]:
@@ -184,7 +66,7 @@ def instrument_beat_marks(code: str) -> tuple[str, int]:
 
     if "from manim import" not in code:
         return code, 0
-    instrumented = "\n".join(lines) + "\n" + _MARK_HELPER
+    instrumented = "\n".join(lines) + "\n\n" + _HARNESS_SOURCE
     try:
         ast.parse(instrumented)
     except SyntaxError:
@@ -310,12 +192,18 @@ def compute_beat_scales(
                 excess -= wait * (1 - sw)
             if excess > 0.05 and motion > 0.05:
                 sp = max(min_play, (motion - excess) / motion)
-        if abs(sp - 1) > 1e-3 or abs(sw - 1) > 1e-3:
-            for member in w.get("members") or [w["id"]]:
-                scales[member] = {"play": round(sp, 4), "wait": round(sw, 4)}
+        uncovered = max(0.0, target - (motion * sp + wait * sw))
+        # The harness plays the pad at the end of the beat (with emphasis), so the
+        # beat ends exactly when the next narration starts — no frozen frames later.
+        pad = round(uncovered, 3) if uncovered > 0.05 else 0.0
+        if abs(sp - 1) > 1e-3 or abs(sw - 1) > 1e-3 or pad:
+            scale = {"play": round(sp, 4), "wait": round(sw, 4), "pad": pad}
+            members = w.get("members") or [w["id"]]
+            for member in members:
+                scales[member] = dict(scale, pad=0.0)
+            scales[members[-1]]["pad"] = pad  # pad once, at the end of the window
         holds = w.get("wait_list") or ([wait] if wait > 0 else [])
         long_holds = sum(max(0.0, h * sw - dead_air_after) for h in holds)
-        uncovered = max(0.0, target - (motion * sp + wait * sw))
         static = long_holds + uncovered
         total_target += target
         total_static += static
@@ -441,6 +329,22 @@ def compute_retime(
 
 def _needs_retime(plan: list[dict[str, float]]) -> bool:
     return any(abs(p["factor"] - 1.0) > 0.02 or p["hold"] > 0.08 for p in plan)
+
+
+def longest_still(path: str, min_sec: float = 2.0) -> float:
+    """Longest stretch (seconds) where the picture doesn't change, via ffmpeg freezedetect."""
+    try:
+        out = subprocess.run(
+            [
+                "ffmpeg", "-hide_banner", "-i", path,
+                "-vf", f"freezedetect=n=0.001:d={min_sec}", "-map", "0:v", "-f", "null", "-",
+            ],
+            capture_output=True, text=True, timeout=300,
+        ).stderr
+    except (subprocess.SubprocessError, OSError):
+        return 0.0
+    durations = [float(x) for x in re.findall(r"freeze_duration:\s*([\d.]+)", out)]
+    return max(durations, default=0.0)
 
 
 def _video_fps(path: str) -> float:

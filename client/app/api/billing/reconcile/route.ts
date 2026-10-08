@@ -10,6 +10,7 @@ import {
   planFromDodoProductId,
   type PlanId,
 } from "@/lib/billing/plans";
+import { publicSubscriptionStatus } from "@/lib/billing/status";
 import { db } from "@/lib/db";
 
 function dodoBase(): string {
@@ -123,7 +124,7 @@ export async function POST() {
       ok: true,
       plan: row.plan,
       renderCredits: row.renderCredits,
-      subscriptionStatus: row.subscriptionStatus,
+      subscriptionStatus: publicSubscriptionStatus(row.subscriptionStatus),
       billingPeriod: row.billingPeriod,
       synced: true,
     });
@@ -143,7 +144,7 @@ export async function POST() {
       ok: true,
       plan: row.plan,
       renderCredits: row.renderCredits,
-      subscriptionStatus: row.subscriptionStatus,
+      subscriptionStatus: publicSubscriptionStatus(row.subscriptionStatus),
       pending,
       synced: false,
       reason: "missing_dodo_key",
@@ -184,7 +185,7 @@ export async function POST() {
       ok: true,
       plan: row.plan,
       renderCredits: row.renderCredits,
-      subscriptionStatus: row.subscriptionStatus,
+      subscriptionStatus: publicSubscriptionStatus(row.subscriptionStatus),
       pending,
       synced: false,
       reason: "missing_customer",
@@ -226,7 +227,7 @@ export async function POST() {
         ok: true,
         plan: refreshed?.plan ?? plan,
         renderCredits: refreshed?.renderCredits ?? 0,
-        subscriptionStatus: refreshed?.subscriptionStatus ?? "active",
+        subscriptionStatus: publicSubscriptionStatus(refreshed?.subscriptionStatus ?? "active"),
         billingPeriod: refreshed?.billingPeriod ?? null,
         synced: true,
         source: "dodo_subscriptions",
@@ -273,7 +274,7 @@ export async function POST() {
         ok: true,
         plan: refreshed?.plan ?? plan,
         renderCredits: refreshed?.renderCredits ?? 0,
-        subscriptionStatus: refreshed?.subscriptionStatus ?? "active",
+        subscriptionStatus: publicSubscriptionStatus(refreshed?.subscriptionStatus ?? "active"),
         billingPeriod: refreshed?.billingPeriod ?? null,
         synced: true,
         source: "dodo_payments",
@@ -285,7 +286,7 @@ export async function POST() {
     ok: true,
     plan: row.plan,
     renderCredits: row.renderCredits,
-    subscriptionStatus: row.subscriptionStatus,
+    subscriptionStatus: publicSubscriptionStatus(row.subscriptionStatus),
     billingPeriod: row.billingPeriod,
     pending,
     synced: false,

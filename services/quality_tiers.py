@@ -69,11 +69,11 @@ TIER=3 (Complex — still crash-safe):
 
 STATUS_COPY: dict[str, dict[str, Any]] = {
     "queued": {"message": "Queued…", "eta_delta": 0},
-    "routing": {"message": "Choosing engine…", "eta_delta": -5},
-    "planning": {"message": "Planning animation…", "eta_delta": -8},
+    "routing": {"message": "Getting started…", "eta_delta": -5},
+    "planning": {"message": "Planning the lesson…", "eta_delta": -8},
     "generating_audio": {"message": "Generating narration…", "eta_delta": -15},
-    "generating_code": {"message": "Writing animation code…", "eta_delta": -35},
-    "merging": {"message": "Combining audio & video…", "eta_delta": -12},
+    "generating_code": {"message": "Designing visuals…", "eta_delta": -35},
+    "merging": {"message": "Finishing touches…", "eta_delta": -12},
     "uploading": {"message": "Uploading…", "eta_delta": -8},
     "processing": {"message": "Working…", "eta_delta": -20},
     "completed": {"message": "Done!", "eta_delta": 0},
@@ -121,7 +121,9 @@ def status_payload(phase: str, tier: Optional[str] = None) -> dict[str, Any]:
     copy = STATUS_COPY.get(phase) or STATUS_COPY["processing"]
     eta = est["eta_seconds"]
     delta = copy.get("eta_delta")
-    if isinstance(delta, int):
+    if phase == "completed":
+        eta = 0
+    elif isinstance(delta, int):
         eta = max(15, eta + delta)
     return {
         "phase": phase,

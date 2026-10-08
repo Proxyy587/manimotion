@@ -4,13 +4,13 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useMemo,
   useState,
   type ReactNode,
 } from "react";
 import { Moon, Sun } from "lucide-react";
 
+import { useMountEffect } from "@/hooks/use-mount-effect";
 import { cn } from "@/lib/utils";
 
 export type Theme = "light" | "dark";
@@ -37,7 +37,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>("dark");
   const [ready, setReady] = useState(false);
 
-  useEffect(() => {
+  useMountEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY) as Theme | null;
     const preferred =
       stored === "light" || stored === "dark"
@@ -48,7 +48,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     setThemeState(preferred);
     applyTheme(preferred);
     setReady(true);
-  }, []);
+  });
 
   const setTheme = useCallback((next: Theme) => {
     setThemeState(next);

@@ -49,7 +49,7 @@ export const PLANS: PlanDefinition[] = [
     name: "Free",
     priceLabel: "$0",
     priceUsd: 0,
-    blurb: "Try the pipeline. API included — solid open models.",
+    blurb: "Try it free. API included — solid open models.",
     rendersLabel: "3 renders / day",
     monthlyRenders: null,
     dailyRenders: 3,
@@ -87,7 +87,7 @@ export const PLANS: PlanDefinition[] = [
     features: [
       "40 renders / month",
       "GPT-4o unlocked",
-      "Claude 3.5 Sonnet unlocked (best Manim quality)",
+      "Claude 3.5 Sonnet unlocked (best quality)",
       "All Free models included",
       "1080p · no watermark",
       "API access · commercial use",

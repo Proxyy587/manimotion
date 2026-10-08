@@ -21,6 +21,7 @@ import {
   setPreferredDuration,
   setPreferredModel,
 } from "@/lib/chalkboard-api";
+import { STYLE_OPTIONS, type VideoStyle } from "@/lib/chalkboard-types";
 import { DEMO_PROMPTS, type DemoPrompt } from "@/lib/demo-prompts";
 import {
   PROMPT_MAX_LENGTH,
@@ -43,24 +44,16 @@ const IDEAS = [
   },
 ];
 
-const PIPELINE_STEPS = ["Plan", "Narrate", "Animate", "Render", "Sync"];
-
-const ENGINE_HINTS: Record<"auto" | "manim" | "remotion", string> = {
-  auto: "Pick the engine automatically",
-  manim: "Math, equations, graphs",
-  remotion: "Charts, timelines, explainers",
-};
-
 const FEATURES = [
   {
     n: "01",
-    title: "Beat-sheet sync",
-    body: "Visuals, narration, and timing share one plan — audio before render.",
+    title: "Narrated and in sync",
+    body: "Every visual lands on the words that explain it.",
   },
   {
     n: "02",
-    title: "Manim + Remotion",
-    body: "Math engines and motion graphics, routed automatically or forced.",
+    title: "Math and graphics",
+    body: "Equations and proofs, or charts and timelines — matched to your topic.",
   },
   {
     n: "03",
@@ -76,7 +69,7 @@ export default function LandingPage() {
   const [value, setValue] = useState("");
   const [model, setModel] = useState(DEFAULT_LECTURE_MODEL);
   const [duration, setDuration] = useState<number | undefined>(undefined);
-  const [engine, setEngine] = useState<"auto" | "manim" | "remotion">("auto");
+  const [style, setStyle] = useState<VideoStyle>("auto");
   const [busy, setBusy] = useState(false);
   const [prefsReady, setPrefsReady] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -115,13 +108,13 @@ export default function LandingPage() {
         model,
         duration: demo?.duration ?? duration,
         tier: demo?.tier ?? "tier2",
-        engine: demo?.engine ?? engine,
+        style: demo?.style ?? style,
         autoStart: Boolean(demo),
       });
       setValue("");
       router.push(`/thread/${id}`);
     },
-    [busy, createThreadFromPrompt, duration, engine, model, router],
+    [busy, createThreadFromPrompt, duration, model, router, style],
   );
 
   async function copyCmd() {
@@ -152,9 +145,8 @@ export default function LandingPage() {
           STEM lectures as motion graphics — for talks, tutors, and products.
         </p>
         <p className="lp-position">
-          Describe a topic. We plan beats, narrate, animate with <b>Manim</b> or{" "}
-          <b>Remotion</b>, and sync audio to the cut. Open demo — no account
-          required.
+          Describe a topic and get a narrated, animated lecture back — visuals
+          timed to every word. Open demo — no account required.
         </p>
 
         <div className="lp-cmd">
@@ -241,23 +233,21 @@ export default function LandingPage() {
                   </div>
                 )}
                 <div className="flex items-center gap-1">
-                  {(["auto", "manim", "remotion"] as const).map((opt) => (
+                  {STYLE_OPTIONS.map((opt) => (
                     <button
-                      key={opt}
+                      key={opt.value}
                       type="button"
-                      title={ENGINE_HINTS[opt]}
-                      aria-pressed={engine === opt}
-                      onClick={() => setEngine(opt)}
+                      title={opt.hint}
+                      aria-pressed={style === opt.value}
+                      onClick={() => setStyle(opt.value)}
                       className={[
                         "rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors",
-                        engine === opt
+                        style === opt.value
                           ? "border-[var(--chip-line)] bg-[var(--chip)] text-foreground"
                           : "border-transparent text-[var(--lp-muted-2)] hover:text-foreground",
                       ].join(" ")}
                     >
-                      {opt === "auto"
-                        ? "Auto"
-                        : opt.charAt(0).toUpperCase() + opt.slice(1)}
+                      {opt.label}
                     </button>
                   ))}
                 </div>
@@ -321,7 +311,7 @@ export default function LandingPage() {
           <section id="starters">
             <h2>Try a starter</h2>
             <p>
-              Pre-validated Tier‑1 topics — usually ready in about 1–2 minutes.
+              Tested topics — usually ready in about 1–2 minutes.
             </p>
             <div className="lp-starters">
               {DEMO_PROMPTS.map((item) => (
@@ -342,12 +332,6 @@ export default function LandingPage() {
                   <div className="t">{item.label}</div>
                   <div className="b">{item.prompt}</div>
                   <div className="lp-tags">
-                    <span className="lp-tag">
-                      {item.engine === "auto"
-                        ? "Auto"
-                        : item.engine.charAt(0).toUpperCase() +
-                          item.engine.slice(1)}
-                    </span>
                     <span className="lp-tag">{item.duration}s</span>
                     <span className="lp-tag">{item.etaDisplay}</span>
                   </div>
@@ -356,27 +340,8 @@ export default function LandingPage() {
             </div>
           </section>
 
-          <section id="why">
-            <h2>Why it works</h2>
-            <p>
-              Quality comes from planning first — not patching sync after the
-              fact.
-            </p>
-            <div className="lp-pipeline">
-              <span className="lp-pipeline-track" aria-hidden>
-                <span className="lp-pipeline-pulse" />
-              </span>
-              <ol aria-label="Generation pipeline">
-                {PIPELINE_STEPS.map((step, i) => (
-                  <li key={step} className="lp-pipeline-step">
-                    <span className="node">
-                      {String(i + 1).padStart(2, "0")}
-                    </span>
-                    <span className="label">{step}</span>
-                  </li>
-                ))}
-              </ol>
-            </div>
+          <section id="features">
+            <h2>What you get</h2>
             <div className="lp-features">
               {FEATURES.map((f) => (
                 <div key={f.n} className="lp-feature">

@@ -79,7 +79,7 @@ export default function SettingsOverviewPage() {
             Documentation
           </p>
           <p className="mt-0.5 text-[12px] text-[var(--muted-text)]">
-            Pipeline, API, auth, engines — reference docs.
+            Quickstart, API reference, storage, styles.
           </p>
         </div>
         <ArrowUpRight className="size-3.5 text-[var(--muted-2)]" />

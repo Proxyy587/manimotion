@@ -1,4 +1,5 @@
 import asyncio
+import math
 import os
 import subprocess
 import uuid
@@ -8,6 +9,7 @@ from typing import Any, Optional
 from prompts.manim_prompt import MANIM_ERROR_HINTS
 from router import route_prompt
 from services.audio import generate_audio_with_captions
+from services.beat_sync import longest_still
 from services.beat_timing import apply_measured_timings_to_plan
 from services.config import (
     cleanup_job_dir,
@@ -650,8 +652,9 @@ async def process_topic_async(
         timed_plan = apply_measured_timings_to_plan(
             visual_plan, beat_map, audio_duration
         )
+        # Round up so the picture never ends before the narration does.
         code_duration = (
-            int(round(audio_duration)) if audio_duration > 0 else plan_duration
+            math.ceil(audio_duration) if audio_duration > 0 else plan_duration
         )
         log(
             f"Audio {audio_duration:.1f}s → measured {len(beat_map)} beats → "
@@ -696,14 +699,10 @@ async def process_topic_async(
 
         log(f"✅ Base video: {video}")
         video_duration = get_media_duration(video)
-        if audio_duration > 0 and video_duration > 0:
-            drift = abs(video_duration - audio_duration)
-            if drift > 2.0:
-                log(
-                    f"  ⚠️ Duration drift {drift:.1f}s "
-                    f"(video {video_duration:.1f}s vs audio {audio_duration:.1f}s) — "
-                    f"merging without speed change"
-                )
+        log(
+            f"  📏 Video {video_duration:.1f}s vs narration {audio_duration:.1f}s · "
+            f"longest still stretch {longest_still(video):.1f}s"
+        )
 
         set_status("merging", engine=chosen_engine)
         final_video = merge_video_audio_captions(

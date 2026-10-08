@@ -10,7 +10,7 @@ export const SITE_DESCRIPTION =
   "Generate videos from a single prompt. Simple API for developers to create animations, explainers, and educational videos";
 
 export const SITE_TAGLINE =
-  "STEM lecture videos as an API — Manim, Remotion, narration, sync.";
+  "Narrated STEM lecture videos from a single prompt, as an API.";
 
 /** High-intent keywords for search + social discovery */
 export const SITE_KEYWORDS = [
@@ -22,8 +22,6 @@ export const SITE_KEYWORDS = [
   "educational video API",
   "explainer video generator",
   "STEM video generator",
-  "Manim API",
-  "Remotion API",
   "lecture video API",
   "animation API for developers",
   "math animation API",
@@ -34,7 +32,6 @@ export const SITE_KEYWORDS = [
   "Cloudflare R2 video upload",
   "developer video API",
   "narrated lecture video",
-  "OpenRouter video pipeline",
   "Bayes theorem video",
   "Fourier series animation",
   "gradient descent visualization",
@@ -147,7 +144,7 @@ export function websiteJsonLd() {
         featureList: [
           "Generate narrated STEM lecture videos from a single prompt",
           "Async job API with status polling",
-          "Manim and Remotion engines",
+          "Math animations and motion-graphics explainers",
           "Bring-your-own R2 / S3 storage",
           "Simple x-api-key authentication",
         ],

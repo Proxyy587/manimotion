@@ -1,11 +1,12 @@
 "use client";
 
 import { Copy, Plus, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { setStoredApiKey } from "@/lib/chalkboard-api";
+import { useMountEffect } from "@/hooks/use-mount-effect";
 import { readJsonSafe } from "@/lib/http";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -62,9 +63,9 @@ export default function ApiKeysSettingsPage() {
     }
   }, []);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  useMountEffect(() => {
+    void load();
+  });
 
   async function createKey() {
     if (!name.trim()) return;

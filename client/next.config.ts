@@ -7,7 +7,9 @@ const nextConfig: NextConfig = {
   async redirects() {
     return [
       { source: "/docs/auth", destination: "/docs/api", permanent: true },
-      { source: "/docs/pipeline", destination: "/docs/engines", permanent: true },
+      { source: "/docs/pipeline", destination: "/docs/styles", permanent: true },
+      { source: "/docs/engines", destination: "/docs/styles", permanent: true },
+      { source: "/docs/contributing", destination: "/docs", permanent: true },
     ];
   },
 };

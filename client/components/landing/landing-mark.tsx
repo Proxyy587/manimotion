@@ -42,7 +42,7 @@ export function LandingMark({ className }: { className?: string }) {
     let h = 0;
     let raf = 0;
     let particles: Particle[] = [];
-    let mouse = { x: -9999, y: -9999, active: false };
+    const mouse = { x: -9999, y: -9999, active: false };
     let t = 0;
     let ripples: { x: number; y: number; r: number; life: number }[] = [];
 

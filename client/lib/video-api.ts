@@ -30,7 +30,7 @@ export type VideoStorageRequest = {
 export type VideoRequestBody = {
   prompt: string;
   model?: string;
-  engine?: "auto" | "manim" | "remotion";
+  style?: "auto" | "math" | "graphics";
   duration?: number;
   tier?: "tier1" | "tier2" | "tier3";
   storage?: VideoStorageRequest;
@@ -44,7 +44,7 @@ export type VideoJobResponse = {
   status: string;
   cached?: boolean;
   video_url?: string | null;
-  engine?: string | null;
+  style?: string | null;
   eta_seconds?: number | null;
   eta_display?: string | null;
   message?: string | null;
@@ -57,7 +57,7 @@ export type VideoStatusResponse = {
   video_url?: string | null;
   error?: string | null;
   cached?: boolean;
-  engine?: string | null;
+  style?: string | null;
   duration?: number | null;
   phase?: string | null;
   message?: string | null;

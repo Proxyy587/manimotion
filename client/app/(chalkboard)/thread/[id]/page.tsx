@@ -8,6 +8,7 @@ import { useChalkboard } from "@/components/chalkboard/chalkboard-context";
 import { ModelSelector } from "@/components/chalkboard/model-selector";
 import { NavigateHome } from "@/components/chalkboard/navigate-home";
 import { getModelLabel, setPreferredModel } from "@/lib/chalkboard-api";
+import { STYLE_OPTIONS, type VideoStyle } from "@/lib/chalkboard-types";
 import {
   PROMPT_MAX_LENGTH,
   PROMPT_MIN_LENGTH,
@@ -22,18 +23,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-
-type Engine = "auto" | "manim" | "remotion";
-
-const ENGINE_OPTIONS: { value: Engine; label: string; note: string }[] = [
-  { value: "auto", label: "Auto", note: "Routed automatically" },
-  { value: "manim", label: "Manim", note: "Math, equations, LaTeX" },
-  {
-    value: "remotion",
-    label: "Remotion",
-    note: "Charts, timelines, infographics",
-  },
-];
 
 export default function ThreadPage() {
   const params = useParams();
@@ -51,13 +40,16 @@ export default function ThreadPage() {
 
   const prompt = thread?.messages.find((m) => m.role === "user")?.content ?? "";
   const [draft, setDraft] = useState(prompt);
-  const [engine, setEngine] = useState<Engine>(thread?.engine ?? "auto");
+  const [style, setStyle] = useState<VideoStyle>(thread?.style ?? "auto");
 
-  useEffect(() => {
+  // Threads load from storage after mount: re-seed the editor once per thread.
+  const seedKey = `${id}:${hydrated}`;
+  const [seededFor, setSeededFor] = useState(seedKey);
+  if (seededFor !== seedKey) {
+    setSeededFor(seedKey);
     setDraft(prompt);
-    setEngine(thread?.engine ?? "auto");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, hydrated]); // threads load from storage after mount, so re-sync once hydrated
+    setStyle(thread?.style ?? "auto");
+  }
 
   // Starter templates auto-kick the pipeline so the first click always renders.
   useEffect(() => {
@@ -78,7 +70,7 @@ export default function ThreadPage() {
     void startLectureRender(id, undefined, {
       duration: thread.duration,
       tier: thread.tier,
-      engine: thread.engine,
+      style: thread.style,
     });
   }, [hydrated, id, startLectureRender, thread]);
 
@@ -105,11 +97,12 @@ export default function ThreadPage() {
     void startLectureRender(id, draft, {
       duration: thread!.duration,
       tier: thread!.tier,
-      engine,
+      style,
     });
   }
 
-  const selectedEngine = ENGINE_OPTIONS.find((o) => o.value === engine)!;
+  const selectedStyle =
+    STYLE_OPTIONS.find((o) => o.value === style) ?? STYLE_OPTIONS[0];
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col lg:flex-row">
@@ -186,17 +179,16 @@ export default function ThreadPage() {
               onDurationChange={(d) => setThreadDuration(id, d)}
             />
 
-            {/* Engine selector */}
             <div className="flex items-center gap-2">
               <Select
-                value={engine}
-                onValueChange={(v) => setEngine(v as Engine)}
+                value={style}
+                onValueChange={(v) => setStyle(v as VideoStyle)}
               >
                 <SelectTrigger size="sm" className="h-8 min-w-[110px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {ENGINE_OPTIONS.map((opt) => (
+                  {STYLE_OPTIONS.map((opt) => (
                     <SelectItem key={opt.value} value={opt.value}>
                       {opt.label}
                     </SelectItem>
@@ -204,15 +196,13 @@ export default function ThreadPage() {
                 </SelectContent>
               </Select>
               <span className="text-[11px] leading-relaxed text-[var(--muted-2)]">
-                {selectedEngine.note}
+                {selectedStyle.hint}
               </span>
             </div>
 
             <p className="text-[11px] leading-relaxed text-[var(--muted-2)]">
               {getModelLabel(thread.model)}
-              {thread.tier === "tier1"
-                ? " · Fast template (~1–2 min)"
-                : " · Narration → code → render → merge"}
+              {thread.tier === "tier1" ? " · Fast (~1–2 min)" : " · ~2–3 min"}
             </p>
           </div>
         </div>
@@ -226,7 +216,7 @@ export default function ThreadPage() {
             await startLectureRender(id, draft, {
               duration: thread.duration,
               tier: thread.tier,
-              engine,
+              style,
             });
           }}
         />

@@ -139,11 +139,11 @@ headers = {
             "STEM topic / lecture request. Min ~3 chars.",
           ],
           [
-            <code key="e">engine</code>,
+            <code key="e">style</code>,
             "no",
             <>
-              <code>auto</code> (default) | <code>manim</code> |{" "}
-              <code>remotion</code>
+              <code>auto</code> (default) | <code>math</code> |{" "}
+              <code>graphics</code>
             </>,
           ],
           [
@@ -205,7 +205,7 @@ headers = {
           ],
           [
             <code key="p">processing</code>,
-            "Planning / TTS / render",
+            "Generating your video",
             "Keep polling (2–3s)",
           ],
           [
@@ -263,12 +263,12 @@ headers = {
         </li>
       </DocList>
       <DocP>
-        Engines details →{" "}
+        Style details →{" "}
         <Link
-          href="/docs/engines"
+          href="/docs/styles"
           className="text-foreground underline-offset-2 hover:underline"
         >
-          Engines
+          Styles
         </Link>
         . BYO bucket →{" "}
         <Link

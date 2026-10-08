@@ -18,12 +18,8 @@ export const DOCS_NAV = [
     items: [
       { href: "/docs/api", label: "Reference" },
       { href: "/docs/storage", label: "Storage" },
-      { href: "/docs/engines", label: "Engines" },
+      { href: "/docs/styles", label: "Styles" },
     ],
-  },
-  {
-    group: "Project",
-    items: [{ href: "/docs/contributing", label: "Contributing" }],
   },
 ] as const;
 

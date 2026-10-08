@@ -24,7 +24,7 @@ import { JsonLd } from "@/components/seo/json-ld";
 export const metadata: Metadata = pageMetadata({
   title: "Introduction",
   description:
-    "What is manimotion? Turn a STEM prompt into a narrated lecture video via HTTP — Manim, Remotion, voice, and sync included.",
+    "What is manimotion? Turn a STEM prompt into a narrated lecture video via HTTP — visuals, voice, and timing included.",
   path: "/docs",
   keywords: [
     "manimotion introduction",
@@ -35,7 +35,7 @@ export const metadata: Metadata = pageMetadata({
 
 const TOC = [
   { id: "what", label: "What is manimotion?" },
-  { id: "flow", label: "How a job works" },
+  { id: "flow", label: "Job lifecycle" },
   { id: "endpoints", label: "Endpoints" },
   { id: "taste", label: "Quick taste" },
   { id: "next", label: "Where to go next" },
@@ -56,8 +56,8 @@ export default function DocsIntroPage() {
       <DocH1>Introduction</DocH1>
       <DocLead>
         manimotion is an HTTP API that turns a STEM prompt into a narrated
-        lecture video. You send a topic. We plan beats, generate voice, animate
-        with Manim or Remotion, sync audio to the cut, and return an MP4 URL.
+        lecture video. You send a topic; you get back an MP4 URL with
+        narration and visuals timed together.
       </DocLead>
 
       <div className="mt-8 grid overflow-hidden rounded-[10px] border border-[var(--chip-line)] sm:grid-cols-2">
@@ -78,9 +78,9 @@ export default function DocsIntroPage() {
             body: "Ship finished videos to your R2 / S3 bucket.",
           },
           {
-            href: "/docs/engines",
-            title: "Engines",
-            body: "When to force Manim vs Remotion vs auto.",
+            href: "/docs/styles",
+            title: "Styles",
+            body: "When to force math vs graphics vs auto.",
           },
         ].map((card) => (
           <Link
@@ -105,17 +105,19 @@ export default function DocsIntroPage() {
       <DocList>
         <li>Public API with an <code>x-api-key</code> header</li>
         <li>Async jobs (create, then poll)</li>
-        <li>Math-heavy scenes (Manim) and motion-graphics scenes (Remotion)</li>
+        <li>Math animations and motion-graphics explainers</li>
         <li>Optional BYO storage so MP4s land in your bucket</li>
       </DocList>
 
-      <DocH2 id="flow">How a job works</DocH2>
-      <DocP>Under the hood, every request goes roughly like this:</DocP>
+      <DocH2 id="flow">Job lifecycle</DocH2>
       <DocList>
-        <li>Router picks engine (or uses the one you forced)</li>
-        <li>Beat sheet plans visuals + narration + timing together</li>
-        <li>TTS runs first so animation targets real speech length</li>
-        <li>Code is generated, rendered, synced, uploaded</li>
+        <li>
+          <code>POST /video/request</code> returns a <code>job_id</code>
+        </li>
+        <li>
+          Poll <code>/video/status/{"{job_id}"}</code> — <code>message</code>{" "}
+          and <code>eta_seconds</code> show progress
+        </li>
         <li>
           You get <code>video_url</code> when <code>status</code> is{" "}
           <code>completed</code>
@@ -174,13 +176,6 @@ export default function DocsIntroPage() {
           className="text-foreground underline-offset-2 hover:underline"
         >
           API reference
-        </Link>
-        . Hacking on the repo? See{" "}
-        <Link
-          href="/docs/contributing"
-          className="text-foreground underline-offset-2 hover:underline"
-        >
-          Contributing
         </Link>
         .
       </DocP>

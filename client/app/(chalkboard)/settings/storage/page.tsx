@@ -1,13 +1,14 @@
 "use client";
 
 import { Plus, Trash2, RefreshCw } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useMountEffect } from "@/hooks/use-mount-effect";
 import { readJsonSafe } from "@/lib/http";
 import {
   Select,
@@ -98,9 +99,9 @@ export default function StorageSettingsPage() {
     }
   }, []);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  useMountEffect(() => {
+    void load();
+  });
 
   function buildPayload() {
     if (provider === "UPLOADTHING") {

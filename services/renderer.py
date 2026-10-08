@@ -51,12 +51,18 @@ def render_video(
     *,
     quality: Optional[str] = None,
     marks_path: Optional[str] = None,
+    scales: Optional[dict] = None,
+    measure_only: bool = False,
 ) -> tuple[Optional[str], Optional[str]]:
     """
-    Render `Scene` from `code`. If `marks_path` is set, instrumented code writes
-    beat timestamps there (see services.beat_sync).
+    Render `Scene` from `code`. Instrumented code (services.beat_sync) writes beat
+    stats to `marks_path` and applies per-beat time `scales`.
+
+    measure_only: run construct() with animations skipped (`-s`), which is fast
+    but advances the scene clock exactly like a real render. Returns
+    (marks_path, None) on success so callers can read the measured timings.
     """
-    log("Step 2/6: Starting Manim rendering...")
+    log("Step 2/6: Measuring scene timing..." if measure_only else "Step 2/6: Starting Manim rendering...")
     job_id = str(uuid.uuid4())
     os.makedirs(output_dir, exist_ok=True)
     file_path = os.path.join(output_dir, f"{job_id}.py")
@@ -66,14 +72,17 @@ def render_video(
     env = os.environ.copy()
     if marks_path:
         env["CLARITY_BEAT_MARKS"] = marks_path
+    if scales:
+        env["CLARITY_BEAT_SCALES"] = json.dumps(scales)
     timeout = _render_timeout_sec()
 
-    quality_flag = _manim_quality_flag(quality)
+    quality_flag = "-ql" if measure_only else _manim_quality_flag(quality)
     cmd = [
         *_manim_cmd(),
         file_path,
         "Scene",
         quality_flag,
+        *(["-s"] if measure_only else []),
         "--media_dir",
         output_dir,
         "-o",
@@ -90,7 +99,12 @@ def render_video(
             env=env,
             timeout=timeout,
         )
-        log(f"  ✔️ Rendering finished in {time.time()-t0:.1f}s.")
+        log(
+            f"  ✔️ {'Measure pass' if measure_only else 'Rendering'} finished "
+            f"in {time.time()-t0:.1f}s."
+        )
+        if measure_only:
+            return marks_path, None
     except subprocess.TimeoutExpired:
         err = (
             f"Render timed out after {timeout:.0f}s (MANIM_RENDER_TIMEOUT). "

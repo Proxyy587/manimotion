@@ -30,6 +30,11 @@ DEFAULT_MODEL = os.getenv("DEFAULT_MODEL", "google/gemini-2.5-flash")
 PLANNER_MODEL = os.getenv("PLANNER_MODEL", "openai/gpt-4o-mini")
 NARRATION_MODEL = os.getenv("NARRATION_MODEL", "google/gemini-2.5-flash")
 JUDGE_MODEL = os.getenv("JUDGE_MODEL", PLANNER_MODEL)
+# Low temperature for code: fewer invented APIs → fewer crashes.
+try:
+    CODE_TEMPERATURE = float(os.getenv("CODE_TEMPERATURE", "0.3"))
+except ValueError:
+    CODE_TEMPERATURE = 0.3
 
 
 def clean_code(code: str, language: str = "python") -> str:
@@ -330,7 +335,12 @@ def generate_manim_code(
             else previous_code[:6000] + "\n# ... truncated ..."
         )
         user_msg += f"\n\nPREVIOUS ATTEMPT:\n{trimmed}"
-    if error:
+    if error and error.startswith("PACING PROBLEM"):
+        user_msg += (
+            "\n\nThe PREVIOUS ATTEMPT renders correctly. Improve it — do not start over:\n"
+            f"{error}"
+        )
+    elif error:
         # error may already be a structured block from manim_error_parser
         err_block = error if len(error) < 10000 else error[-10000:]
         user_msg += f"\n\nRENDER ERROR TO FIX:\n{err_block}\n{MANIM_ERROR_HINTS}"
@@ -346,6 +356,7 @@ def generate_manim_code(
             {"role": "system", "content": MANIM_SYSTEM_PROMPT},
             {"role": "user", "content": user_msg},
         ],
+        temperature=CODE_TEMPERATURE,
     )
     raw = clean_code(response.choices[0].message.content, "python")
     code, fixes = sanitize_generated_code_with_fixes(raw, force_safe_tmt=force_safe_tmt)
@@ -406,6 +417,7 @@ def generate_remotion_code(
             {"role": "system", "content": REMOTION_SYSTEM_PROMPT},
             {"role": "user", "content": user_msg},
         ],
+        temperature=CODE_TEMPERATURE,
     )
     code = sanitize_remotion_code(response.choices[0].message.content)
     if "MainComposition" not in code:

@@ -44,6 +44,13 @@ def log(msg: str):
     print(msg, flush=True)
 
 
+def _env_float(name: str, default: float) -> float:
+    try:
+        return float(os.getenv(name, str(default)))
+    except ValueError:
+        return default
+
+
 def _apply_plan_quality(
     video_path: str,
     output_dir: str,
@@ -104,7 +111,15 @@ async def _run_manim_pipeline(
     tier: Optional[str] = None,
     beat_map: Optional[dict[str, Any]] = None,
 ) -> tuple[Optional[str], Optional[str]]:
-    from services.beat_sync import instrument_beat_marks, read_beat_marks, retime_to_beats
+    from services.beat_sync import (
+        beat_windows,
+        compute_beat_scales,
+        format_pacing_feedback,
+        instrument_beat_marks,
+        read_beat_marks,
+        read_beat_stats,
+        retime_to_beats,
+    )
     from services.example_store import save_successful_example
     from services.manim_attempt_models import get_model_for_manim_attempt
     from services.manim_error_parser import build_retry_prompt, parse_manim_error
@@ -112,68 +127,105 @@ async def _run_manim_pipeline(
     from services.manim_templates import build_guaranteed_manim_code
     from services.manim_validator import format_validation_errors, validate_manim_code
 
-    marks_by_video: dict[str, str] = {}
+    timed = bool(audio_duration and audio_duration > 0)
+    max_static = _env_float("MANIM_MAX_STATIC_RATIO", 0.3)
+    pacing_retries = int(_env_float("MANIM_PACING_RETRIES", 1))
+    max_play_stretch = _env_float("MANIM_MAX_PLAY_STRETCH", 1.8)
 
-    def _render(src: str) -> tuple[Optional[str], Optional[str]]:
-        instrumented, n_marks = instrument_beat_marks(src)
-        marks_path = (
-            os.path.join(output_dir, f"beat_marks_{uuid.uuid4().hex[:8]}.json")
-            if n_marks
-            else None
-        )
-        out, render_err = render_video(
+    def _marks_path() -> str:
+        return os.path.join(output_dir, f"beat_marks_{uuid.uuid4().hex[:8]}.json")
+
+    def _measure(
+        src: str,
+    ) -> tuple[str, dict[str, Any], Optional[dict[str, Any]], Optional[str]]:
+        """
+        Fast pass with animations skipped: catches crashes without a full render
+        and measures how long each beat animates vs. how long it is narrated.
+        Returns (instrumented_code, scales, pacing_report, error).
+        """
+        instrumented, _ = instrument_beat_marks(src)
+        if instrumented == src or not timed:
+            return instrumented, {}, None, None
+        path = _marks_path()
+        _, err = render_video(
             instrumented,
             output_dir=output_dir,
             log=log,
-            quality=manim_quality,
-            marks_path=marks_path,
+            measure_only=True,
+            marks_path=path,
         )
-        if out and marks_path:
-            marks_by_video[out] = marks_path
-        return out, render_err
+        if err:
+            return instrumented, {}, None, err
+        stats = read_beat_stats(path)
+        if stats["end"] <= 0:
+            return instrumented, {}, None, None
+        scales, report = compute_beat_scales(
+            beat_windows(stats, beat_map or {}, float(audio_duration)),
+            max_play_stretch=max_play_stretch,
+        )
+        log(
+            f"  ⏱️ Pacing: {stats['end']:.1f}s of animation for "
+            f"{float(audio_duration):.1f}s of narration → "
+            f"{round(report['static_ratio'] * 100)}% frozen screen after stretching motion"
+        )
+        return instrumented, scales, report, None
 
-    def _beat_lock(video_path: str) -> str:
-        if not (audio_duration and audio_duration > 0):
+    def _beat_lock(video_path: str, marks_path: str) -> str:
+        if not timed:
             return video_path
         try:
             vd = get_media_duration(video_path)
         except Exception:
             return video_path
-        marks_path = marks_by_video.get(video_path)
-        marks = read_beat_marks(marks_path) if marks_path else {}
         return retime_to_beats(
             video_path,
-            video_marks=marks,
+            video_marks=read_beat_marks(marks_path),
             video_duration=vd,
             beat_map=beat_map or {},
             audio_duration=float(audio_duration),
             log=log,
         )
 
+    def _render_final(
+        instrumented: str, scales: dict[str, Any]
+    ) -> tuple[Optional[str], Optional[str]]:
+        path = _marks_path()
+        video, err = render_video(
+            instrumented,
+            output_dir=output_dir,
+            log=log,
+            quality=manim_quality,
+            marks_path=path,
+            scales=scales or None,
+        )
+        if not video:
+            return None, err
+        return _beat_lock(video, path), None
+
     last_error = None
     previous_code = None
     force_safe_tmt = False
-    last_stderr = ""
+    pacing_retry = False
+    best: Optional[dict[str, Any]] = None
     plan_text = format_beat_sheet_for_prompt(visual_plan)
     for attempt in range(1, max_attempts + 1):
         attempt_complexity = complexity
         attempt_plan: dict[str, Any] | str = visual_plan
-        # Fail fast toward simple, crash-proof scenes.
-        if attempt >= 2:
+        # After a crash, go simpler — but keep every beat and its timing so the
+        # picture still follows the narration.
+        if attempt >= 2 and not pacing_retry:
             attempt_complexity = "simple"
             attempt_plan = (
-                "Keep it VERY simple and crash-proof:\n"
-                "1) Title at top (Text) — use FadeIn / ReplacementTransform only\n"
-                "2) One main MathTex equation at center\n"
-                "3) SurroundingRectangle highlight on the WHOLE equation\n"
-                "4) Next equation via TransformMatchingTex ONLY if both are MathTex;\n"
-                "   otherwise ReplacementTransform\n"
-                "5) Short conclusion Text\n"
-                "NO get_part_by_tex, NO TransformMatchingTex on Text/VGroup,\n"
-                "NO wait(0), NO run_time=0.\n"
-                "Match beat START AT / HOLD FOR timings with positive self.wait().\n"
-                f"Original plan intent (simplify heavily):\n{plan_text[:1200]}"
+                "Keep it simple and crash-proof, but keep EVERY beat, its # BEAT N "
+                "comment, and its timing:\n"
+                "- Only Text, MathTex, Axes + plot, Dot, Arrow, Line, Rectangle, "
+                "SurroundingRectangle\n"
+                "- Only FadeIn, FadeOut, Write, Create, ReplacementTransform, Indicate\n"
+                "- 2–3 reveals per beat, placed on the SPOKEN CUES\n"
+                "- NO get_part_by_tex, NO TransformMatchingTex, NO wait(0), NO run_time=0\n\n"
+                f"{plan_text[:5000]}"
             )
+        pacing_retry = False
         attempt_model = get_model_for_manim_attempt(attempt, model)
         log(
             f"\n🧠 Manim attempt {attempt}/{max_attempts} "
@@ -231,53 +283,82 @@ async def _run_manim_pipeline(
                 continue
 
         previous_code = code
-        video, err = _render(code)
-        if not video:
-            info = parse_manim_error(err or "")
+        instrumented, scales, report, err = _measure(code)
+        if err:
+            info = parse_manim_error(err)
             if info.get("force_safe_tmt"):
                 force_safe_tmt = True
-                # Immediate deterministic repair + re-render without another LLM call
+                # Deterministic repair + re-measure without another LLM call
                 repaired, fixes = sanitize_manim_code(code, force_safe_tmt=True)
                 if fixes:
                     log(f"  🔧 Crash repair: {', '.join(fixes)}")
                 if repaired != code:
-                    video2, err2 = _render(repaired)
-                    if video2:
-                        previous_code = repaired
-                        video = video2
-                        err = None
-                    else:
-                        err = err2 or err
-                        code = repaired
-                        previous_code = repaired
-                        info = parse_manim_error(err or "")
-
-            if not video:
-                last_stderr = err or ""
-                last_error = build_retry_prompt(
-                    attempt=attempt,
-                    max_attempts=max_attempts,
-                    broken_code=previous_code or code,
-                    stderr=last_stderr,
-                    topic=topic,
-                )
+                    code = previous_code = repaired
+                    instrumented, scales, report, err = _measure(repaired)
+        video = None
+        if not err:
+            ratio = float(report["static_ratio"]) if report else 0.0
+            if best is None or ratio < best["ratio"]:
+                best = {
+                    "code": code,
+                    "instrumented": instrumented,
+                    "scales": scales,
+                    "ratio": ratio,
+                    "attempt": attempt,
+                }
+            if (
+                report
+                and ratio > max_static
+                and pacing_retries > 0
+                and attempt < max_attempts
+            ):
+                pacing_retries -= 1
+                pacing_retry = True
+                last_error = format_pacing_feedback(report, visual_plan)
                 log(
-                    f"🔁 Manim render failed ({info.get('type')}): "
-                    f"{info.get('message')}"
+                    f"  🐢 Picture would be static {round(ratio * 100)}% of the time — "
+                    f"regenerating with more on-screen action"
                 )
-                if info.get("fix_hint"):
-                    log(f"   💡 {info['fix_hint'][:200]}")
                 continue
+            chosen = best
+            if chosen["code"] is not code:
+                log(
+                    f"  ↩️ Keeping attempt {chosen['attempt']} "
+                    f"({round(chosen['ratio'] * 100)}% static) — it moves more"
+                )
+            video, err = _render_final(chosen["instrumented"], chosen["scales"])
+            if video:
+                save_successful_example(topic, chosen["code"], attempt=chosen["attempt"])
+                return video, None
+            best = None
 
-        save_successful_example(topic, previous_code or code, attempt=attempt)
-        # Lock every beat to its narration window instead of one long end freeze.
-        return _beat_lock(video), None
+        info = parse_manim_error(err or "")
+        if info.get("force_safe_tmt"):
+            force_safe_tmt = True
+        last_error = build_retry_prompt(
+            attempt=attempt,
+            max_attempts=max_attempts,
+            broken_code=previous_code or code,
+            stderr=err or "",
+            topic=topic,
+        )
+        log(f"🔁 Manim render failed ({info.get('type')}): {info.get('message')}")
+        if info.get("fix_hint"):
+            log(f"   💡 {info['fix_hint'][:200]}")
+
+    if best is not None:
+        log("\n🎞️ Rendering the best working attempt")
+        video, err = _render_final(best["instrumented"], best["scales"])
+        if video:
+            save_successful_example(topic, best["code"], attempt=best["attempt"])
+            return video, None
 
     log("\n🛟 All Manim attempts failed — rendering guaranteed fallback template")
     fallback_code = build_guaranteed_manim_code(topic, visual_plan)
-    video, err = _render(fallback_code)
+    instrumented, scales, _, err = _measure(fallback_code)
+    video, err = (None, err) if err else _render_final(instrumented, scales)
     if video:
-        return _beat_lock(video), None
+        return video, None
     log(f"  ❌ Fallback template failed: {(err or '')[:300]}")
     return None, last_error or "Manim failed after all attempts"
 

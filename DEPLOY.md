@@ -99,6 +99,15 @@ MANIM_RENDER_TIMEOUT=600
 # exactly when its narration starts. Limits keep motion natural.
 BEAT_SYNC_MAX_SLOWDOWN=1.3
 BEAT_SYNC_MAX_SPEEDUP=1.6
+# Pacing: a fast measure pass times every beat before the real render.
+# Animations in short beats are slowed up to this factor so motion fills the narration.
+MANIM_MAX_PLAY_STRETCH=1.8
+# If more than this share of narration would be frozen screen (holds > 2.5s),
+# regenerate the code once with per-beat feedback.
+MANIM_MAX_STATIC_RATIO=0.3
+MANIM_PACING_RETRIES=1
+# Low temperature for code generation (fewer invented APIs)
+CODE_TEMPERATURE=0.3
 
 # Remotion reliability (optional, same format as the Manim settings)
 REMOTION_ATTEMPT_MODELS=1:google/gemini-2.5-flash,2:google/gemini-2.5-flash,3:openai/gpt-4o

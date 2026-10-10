@@ -1,94 +1,73 @@
 ---
 name: clarity-video-quality
 description: >-
-  Tune Clarity STEM video generation prompts, beat-sheet planning, audio-video
-  sync, and Manim/Remotion quality. Use when improving video output, editing
-  prompts in prompts/, debugging narration sync, or preparing the public API.
+  Tune manimotion lecture generation: lesson plans, per-sentence narration,
+  Manim math slides, the Remotion graphics template, audio-video sync and model
+  selection. Use when improving video output, editing prompts in prompts/,
+  debugging overlaps, still frames or sync, or changing services/slides/.
 ---
 
-# Clarity Video Quality
-
-## When to use
-
-- User reports poor video quality, bad sync, or robotic narration
-- Editing files under `prompts/` or `services/llm.py`
-- Adding features before public API launch
+# manimotion video quality
 
 ## Read first
 
-1. [docs/PROMPT_ENGINEERING.md](../../docs/PROMPT_ENGINEERING.md) — full pipeline
-2. [docs/MANIM_PRODUCTION.md](../../docs/MANIM_PRODUCTION.md) — speed, tiers, templates, ETA
-3. [docs/REMOTION_PRODUCTION.md](../../docs/REMOTION_PRODUCTION.md) — Remotion production
-4. [docs/MANIM_ENGINE.md](../../docs/MANIM_ENGINE.md) — Manim crash rules (`wait(0)` banned)
-5. [docs/REMOTION_ENGINE.md](../../docs/REMOTION_ENGINE.md) — Remotion frame rules
-6. [docs/ROADMAP.md](../../docs/ROADMAP.md) — public API plans
+1. [docs/MANIM_PRODUCTION.md](../../../docs/MANIM_PRODUCTION.md): math lectures (Manim slides, guard, fallback)
+2. [docs/REMOTION_PRODUCTION.md](../../../docs/REMOTION_PRODUCTION.md): graphics lectures (layout specs, fixed template)
+3. [docs/MANIM_ENGINE.md](../../../docs/MANIM_ENGINE.md): Manim API pitfalls (still apply inside slides)
+
+The legacy single-scene pipeline (`PIPELINE_V2=0`) is documented in `PROMPT_ENGINEERING.md`
+and `REMOTION_ENGINE.md`. Don't tune it; all traffic uses the slide pipeline.
 
 ## Pipeline (do not break order)
 
 ```
-route → beat sheet → marked narration → TTS (+ word timestamps)
-  → beat_map → code timed to beats → render → clean merge → R2
+lesson plan (style: math | graphics, chosen by the plan on "auto")
+  → one TTS clip per sentence (measured durations)
+  → math:     one build() body per slide → Manim render + guard → retry/fallback
+    graphics: one layout spec per slide → validate/repair/fallback → one Remotion render
+  → frame-exact assembly → |video − audio| ≤ 0.12 s → upload
 ```
 
-**Audio drives the timeline.** Voice tempo is sacred — never use `atempo`.
+Key files: `services/slides/{storyboard,narration,build,graphics,assemble,pipeline}.py`,
+`services/slides/kit/slide_kit.py`, `remotion-src/src/slides/`, `prompts/slides_prompt.py`,
+`prompts/graphics_prompt.py`.
 
-## Beat sheet contract
+## Invariants
 
-Planner outputs JSON (`prompts/planner_prompt.py`):
-- `beats[].duration_sec` must sum to `target_duration_sec` (planner estimate)
-- Each beat has `visual` + `narration`
-- If user omits `duration`, planner picks 20–120s freely
-
-After TTS, `services/beat_timing.py` **replaces** planner durations with measured
-`start_s` / `end_s` / `duration_sec` from word timestamps (`timing_source=tts`).
-
-Narration scripts must include `[BEAT:N]` markers (`prompts/narration_prompt.py`).
-
-## Sync rules
-
-| Problem | Fix |
-|---------|-----|
-| Narration ahead of visuals | Increase `self.wait()` / honor measured `duration_sec` |
-| Visuals finish before voice | Pad with `self.wait()` to measured beat length |
-| Total length drift | Prefer waits in codegen; merger may freeze-pad video only |
-| Robotic / slow voice | **Bug** — remove any atempo; regenerate with beat_map timing |
-
-Merger (`services/merger.py`):
-- **Never** `atempo` / speed-adjust narration
-- Audio longer: `tpad` freeze-pad video (all `-i` first, then `-vf`)
-- Video longer: `-shortest` so output ends with narration
-- Soft subtitle tracks skipped; burn captions after mux
-
-Latency / reliability:
-- Default `MANIM_MAX_ATTEMPTS=3`; simplify plan from attempt 2
-- Cap beat sheet at 8 beats (tier1: 5)
-- Tier1 / homepage templates use `-ql` + short duration + auto-start
-- LaTeX warmup on API startup (`services/latex_warmup.py`)
-- Job ETA via `eta_display` / `message` / `phase` on status API
-- If render undershoots audio by >1.5s, one pad re-render via `append_end_wait`
-- Pre-render: `manim_sanitizer` + `manim_validator`; TMT crashes auto-repair + re-render
+- **Narration first, visuals fit it.** Never time-stretch audio (no `atempo`); video is only
+  padded by cloning its last frame.
+- **One sentence = one beat.** Every sentence reveals or highlights something; no slide is ever
+  empty below its title.
+- **The user's model is the only model.** No per-attempt rotation, no "strong model" escalation.
+  Retired IDs are aliased in `services/llm.normalize_model` and `client/lib/chalkboard-api.ts`.
+- **Length is automatic.** The duration picker defaults to Auto and is only a soft hint.
+- **Graphics text is content, not code.** Layout lives in the template; the LLM never writes TSX
+  on this path.
+- **A bad slide degrades, never fails the job** (fallback slide, reported in `degraded_slides`).
 
 ## Do not
 
-- Treat video duration as a constraint the audio must fit into
-- Use `atempo` (any factor) on narration
-- Emit `self.wait(0)` / `run_time=0` in Manim prompts or examples
-- Emit `durationInFrames={0}` in Remotion prompts or examples
-- Revert to render-then-narrate as the default
-- Use Manim `-qh` for default/tier1 user jobs (tier1 uses `-ql`; standard uses `-qm`)
-- Remove beat-sheet JSON / `[BEAT:N]` markers without updating `audio.py` + `worker.py`
-- Add `get_part_by_tex` examples to Manim prompts
-- Ship homepage starters that are not tier1 / auto-start
+- Add `self.play` / `self.wait` / `self.add` to slide prompts or examples
+- Loosen the slide guard to make a slide pass; fix the prompt or the slide instead
+- Use absolute positioning for text in `remotion-src/src/slides/layouts.tsx`
+- Call Remotion `delayRender` at module level (long renders time out)
+- Change `LEAD_IN / END_HOLD / LEAD_OUT` in only one of `slide_kit.py` and `assemble.py`
+- Mention Manim or Remotion in user-facing UI copy (users see "Math", "Graphics", "Auto")
 
 ## Quick test
 
 ```bash
-# local
-curl -X POST http://localhost:8000/video/request \
-  -H "Content-Type: application/json" \
-  -H "x-api-key: $CLARITY_API_KEY" \
-  -d '{"prompt":"Explain the product rule in calculus","engine":"manim"}'
+uv run --with pytest python -m pytest -q tests
+cd remotion-src && npx tsc --noEmit -p .
+
+# real job (needs OPENROUTER_API_KEY; output in temp/phase0/<name>_final.mp4)
+MODEL=anthropic/claude-sonnet-4.5 ENGINE=auto \
+  uv run python temp/phase0/run_job.py internet "How the internet grew from ARPANET to today"
 ```
 
-Poll `/video/status/{job_id}` until `completed`. Check job work dir for
-`beat_map.json` and `words.json` when debugging sync.
+Check the log for `🧠 Model:` (it must be the selected model), `🎨 Lecture style:`, and the
+final `📏 … Δ` line. Then build a contact sheet and look for overlaps and still stretches:
+
+```bash
+ffmpeg -i final.mp4 -vf "fps=1/10,scale=480:-1,tile=4x6" -frames:v 1 sheet.png
+```

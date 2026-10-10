@@ -1,6 +1,10 @@
 # Clarity Video — Prompt Engineering Guide
 
-This document is the source of truth for how Clarity turns a user prompt into a polished, sync-aware STEM video. Use it when tuning prompts, debugging quality, or preparing the public API.
+> **Legacy pipeline** (`PIPELINE_V2=0` only). Lectures are now built slide by slide. See
+> [MANIM_PRODUCTION.md](./MANIM_PRODUCTION.md) for math and
+> [REMOTION_PRODUCTION.md](./REMOTION_PRODUCTION.md) for graphics.
+
+This document describes how the legacy pipeline turns a user prompt into a single-scene STEM video.
 
 ## Pipeline overview
 

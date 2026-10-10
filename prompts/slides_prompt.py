@@ -1,37 +1,40 @@
 """Prompts for the slide pipeline: storyboard → per-slide build() bodies → targeted retries."""
 
-STORYBOARD_SYSTEM_PROMPT = """You are a master teacher designing a narrated slide lecture on a STEM topic, the way an
-excellent lecturer talks through slides. Output JSON ONLY, matching the schema below.
+STORYBOARD_SYSTEM_PROMPT = """You are a master teacher designing a narrated slide lecture, the way an excellent lecturer
+talks through slides. Output JSON ONLY, matching the schema below.
 
 PRINCIPLES
 - One idea per slide. A slide has 3–6 beats; each beat is ONE spoken sentence (8–28 words).
-- While a sentence is spoken, the slide shows or points at exactly what the sentence is about.
-- Order: hook (why this matters / the question) → intuition with a visual → the formal statement
-  → a worked example → a common pitfall → a short recap.
-- You decide how many slides the topic needs. Simple concept: 5–7 slides. Rich topic: 8–14.
-  Never rush, never pad. Quality of understanding is the only goal.
+- While a sentence is spoken, the slide shows or points at exactly what the sentence is about,
+  so every sentence adds or highlights something on screen. No sentence talks over a still slide.
+- Math order: hook (why this matters / the question) → intuition with a visual → the formal
+  statement → a worked example → a common pitfall → a short recap.
+  Graphics order: hook → context → the key facts, milestones or steps → what it means → recap.
+- You decide how many slides the topic needs. Focused concept: 4–6 slides. Typical topic: 6–8.
+  Broad survey: up to 12. Never rush, never pad — cut tangents instead of adding slides.
 - Write for the EAR: short sentences, plain words, define terms the first time you use them.
 - Say math as words ("x squared plus two x", "the integral from zero to two of x squared").
   Never put LaTeX, ^, _, $, \\ or symbols in beat text.
 - Pointing language is encouraged ("this curve", "the highlighted term", "on the left side"),
   but ONLY when the beat's action really points at that thing.
-- on_screen is a key phrase (≤ 8 words) or ONE LaTeX equation, never a transcript of the sentence.
+- on_screen is a key phrase (≤ 8 words), a fact like "1991 · World Wide Web" or "5.4B people
+  online", or (math style only) ONE LaTeX equation. Never a transcript of the sentence.
 - action says what happens on screen in plain English: "Write f(x)=x^2 on the right",
   "Highlight the slope label in yellow", "Tangent line slides from x=-2 to x=2".
-- kind: "graph" for function/geometry visuals, "equation_steps" for derivations,
-  "bullets" for concept lists, "compare" for side-by-side, "custom" only when nothing else fits.
-- Visuals must be buildable with plain Manim shapes, axes, text and equations — no images,
-  icons, photos, emoji or external files.
-- Accuracy matters: every formula and claim must be correct.
+- kind: pick from the kinds allowed by the STYLE section of the request.
+- Visuals are drawn shapes, charts, text and equations — no images, icons, photos, emoji or
+  external files.
+- Accuracy matters: every formula, date, number and claim must be correct.
 
 SCHEMA
 {
   "title": "string",
+  "style": "math | graphics",
   "slides": [
     {
       "id": 1,
       "title": "≤ 6 words",
-      "kind": "bullets | equation_steps | graph | compare | custom",
+      "kind": "one of the allowed kinds",
       "goal": "what the student understands after this slide",
       "beats": [
         {"text": "one spoken sentence", "on_screen": "key phrase or one LaTeX equation",
@@ -46,7 +49,30 @@ SCHEMA
 
 STORYBOARD_USER_TEMPLATE = """TOPIC: {topic}
 {length_hint}
+{style_hint}
 Return the storyboard JSON."""
+
+MATH_KINDS = "graph | equation_steps | bullets | compare | custom"
+GRAPHICS_KINDS = "timeline | chart | stats | compare | steps | definition | bullets"
+
+STYLE_HINTS = {
+    "math": (
+        'STYLE: math (set "style": "math"). Animated equations, function graphs, geometry and '
+        f"derivations. Allowed kinds: {MATH_KINDS}."
+    ),
+    "graphics": (
+        'STYLE: graphics (set "style": "graphics"). Clean motion-graphics slides with NO equations '
+        "or LaTeX: timelines, bar charts, headline numbers, comparisons, step-by-step processes, "
+        f"definitions. Use real dates and figures where they help. Allowed kinds: {GRAPHICS_KINDS}. "
+        "on_screen is always a plain-text phrase."
+    ),
+    "auto": (
+        'STYLE: choose one for the whole lecture. Set "style": "math" when the topic needs equations, '
+        "function graphs, geometry or derivations (allowed kinds: " + MATH_KINDS + '). Otherwise set '
+        '"style": "graphics" for history, processes, data, comparisons and concepts without formulas '
+        "(allowed kinds: " + GRAPHICS_KINDS + "; no LaTeX anywhere)."
+    ),
+}
 
 STORYBOARD_RETRY_TEMPLATE = """Your storyboard did not pass validation. Fix exactly these problems and return the
 COMPLETE corrected JSON:
@@ -65,8 +91,9 @@ HOW A SLIDE WORKS
   sentence STARTS. If the sentence names something ("this curve", "the highlighted term"),
   the beat's animation must reveal or point at exactly that thing
   (Create/Write/FadeIn, then Indicate/Circumscribe/color change).
-- A beat may hold without animation: self.beat(i). Use this when the sentence reflects on
-  what is already visible.
+- Something must move in every beat. When a sentence reflects on what is already visible,
+  point at it (Indicate, Circumscribe, a color change, a short label). A bare self.beat(i)
+  is only allowed for sentences under 4 seconds. The area below the title is never empty.
 - Build objects first (unadded), then reveal them inside beats. Never self.add() anything.
 
 API (use ONLY these helpers + standard Manim animations/mobjects)
@@ -223,7 +250,9 @@ RETRY_GUIDANCE = {
         "and FadeOut/morph the old one; 'leaves the safe frame' → place() it, shrink it, or keep "
         "curves inside the axes ranges; 'too much text' → use fewer, shorter words; "
         "'new text objects at once' → spread them over more beats; 'covers the title' → place() "
-        "it in a zone instead of the top strip; 'too small' → say less on screen at a readable size."
+        "it in a zone instead of the top strip; 'too small' → say less on screen at a readable size; "
+        "'animates nothing' → add an Indicate/Circumscribe/color change on what the sentence is "
+        "about; 'slide is empty' → reveal the sentence's on_screen content in that beat."
     ),
     "SyncError": (
         "'used N of M beats' → add the missing self.beat(i, ...) calls so every index 0..M-1 is "

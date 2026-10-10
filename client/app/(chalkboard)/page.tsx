@@ -17,9 +17,7 @@ import { useSession } from "@/lib/auth-client";
 import { useMountEffect } from "@/hooks/use-mount-effect";
 import {
   DEFAULT_LECTURE_MODEL,
-  getPreferredDuration,
   getPreferredModel,
-  setPreferredDuration,
   setPreferredModel,
 } from "@/lib/chalkboard-api";
 import { STYLE_OPTIONS, type VideoStyle } from "@/lib/chalkboard-types";
@@ -79,7 +77,6 @@ export default function LandingPage() {
 
   useMountEffect(() => {
     setModel(getPreferredModel());
-    setDuration(getPreferredDuration());
     setPrefsReady(true);
   });
 
@@ -104,10 +101,9 @@ export default function LandingPage() {
       if (busy) return;
       setBusy(true);
       setPreferredModel(model);
-      setPreferredDuration(duration);
       const id = createThreadFromPrompt(check.prompt, {
         model,
-        duration: demo?.duration ?? duration,
+        duration: demo ? undefined : duration,
         tier: demo?.tier ?? "tier2",
         style: demo?.style ?? style,
         autoStart: Boolean(demo),
@@ -221,10 +217,7 @@ export default function LandingPage() {
                       setPreferredModel(m);
                     }}
                     duration={duration}
-                    onDurationChange={(d) => {
-                      setDuration(d);
-                      setPreferredDuration(d);
-                    }}
+                    onDurationChange={setDuration}
                   />
                 ) : (
                   <div
@@ -313,7 +306,7 @@ export default function LandingPage() {
           <section id="starters">
             <h2>Try a starter</h2>
             <p>
-              Tested topics — usually ready in about 1–2 minutes.
+              Tested topics — usually ready in a few minutes.
             </p>
             <div className="lp-starters">
               {DEMO_PROMPTS.map((item) => (
@@ -334,7 +327,6 @@ export default function LandingPage() {
                   <div className="t">{item.label}</div>
                   <div className="b">{item.prompt}</div>
                   <div className="lp-tags">
-                    <span className="lp-tag">{item.duration}s</span>
                     <span className="lp-tag">{item.etaDisplay}</span>
                   </div>
                 </button>

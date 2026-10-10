@@ -45,7 +45,7 @@ const FAQ_ITEMS = [
   },
   {
     q: "What's the difference between models?",
-    a: "Free-tier models (Gemini Flash, DeepSeek) are fast but occasionally fail on complex topics. Hobby and Pro models (GPT-4o, Claude 3.5 Sonnet, Claude Opus 4) produce richer visuals with noticeably fewer failures.",
+    a: "Free-tier models (Gemini Flash, DeepSeek) are fast but occasionally fail on complex topics. Hobby and Pro models (GPT-4o, Claude Sonnet 4.5, Claude Opus 4.1) produce richer visuals with noticeably fewer failures.",
   },
 ];
 
@@ -88,9 +88,9 @@ const TABLE_ROWS: Array<{
   },
   {
     label: "Models",
-    free: "Gemini 2.5 Flash, Gemini 2.0 Flash, DeepSeek V3.2",
-    hobby: "+ GPT-4o, Claude 3.5 Sonnet",
-    pro: "+ Claude Opus 4",
+    free: "Gemini 2.5 Flash, DeepSeek V3.2",
+    hobby: "+ GPT-4o, Claude Sonnet 4.5",
+    pro: "+ Claude Opus 4.1",
   },
 ];
 

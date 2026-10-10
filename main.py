@@ -22,7 +22,7 @@ from services.quota import (
     plan_max_height,
     plan_wants_watermark,
 )
-from services.llm import DEFAULT_MODEL
+from services.llm import DEFAULT_MODEL, normalize_model
 from services.public_api import engine_for_style, public_error, public_style
 from services.quality_tiers import estimate_job, status_payload
 from services.storage_resolver import ResolvedStorage, resolve_job_storage
@@ -239,7 +239,7 @@ def _enqueue(
     max_height_override: int | None = None,
     tier: str | None = None,
 ) -> JobCreateResponse:
-    model = (model or DEFAULT_MODEL).strip() or DEFAULT_MODEL
+    model = normalize_model(model)
     resolved = resolved or ResolvedStorage("platform", None)
     job_storage = resolved.config
     use_platform_storage = resolved.use_platform

@@ -1,5 +1,9 @@
 # Manim engine guide (Clarity / manimotion)
 
+> The API pitfalls below still apply inside slide bodies. For how math lectures are built today
+> (one slide per idea, `self.beat`, layout guard, fallback slide), see
+> [MANIM_PRODUCTION.md](./MANIM_PRODUCTION.md).
+
 How we generate **reliable** Manim Community Edition scenes for STEM explainers.
 Prompts live in `prompts/manim_prompt.py`; sanitization in `services/llm.py`.
 

@@ -1,5 +1,8 @@
 # Remotion engine guide (Clarity / manimotion)
 
+> **Legacy pipeline** (`PIPELINE_V2=0` only). Graphics lectures now use a fixed, designed template
+> that the LLM fills with content. See [REMOTION_PRODUCTION.md](./REMOTION_PRODUCTION.md).
+
 How we generate **reliable** Remotion compositions for STEM motion graphics.
 Prompts live in `prompts/remotion_prompt.py`; sanitization in `services/llm.py`.
 

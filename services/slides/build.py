@@ -1,7 +1,7 @@
 """
 Step 3–5: write each slide's build() body with the LLM, check it statically, render it,
-and walk the retry ladder (cheap model → same model + error → strong model + error →
-deterministic fallback slide). A single failing slide never fails the job.
+and retry with the error (always the user's chosen model) before falling back to a
+deterministic slide. A single failing slide never fails the job.
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ from services.llm import CODE_TEMPERATURE, _client, clean_code
 from services.renderer import _manim_cmd
 
 KIT_DIR = os.path.join(os.path.dirname(__file__), "kit")
-STRONG_MODEL = os.getenv("SLIDE_STRONG_MODEL", "anthropic/claude-sonnet-4.5")
+CODE_ATTEMPTS = int(os.getenv("SLIDE_CODE_ATTEMPTS", "3"))
 RENDER_TIMEOUT = float(os.getenv("SLIDE_RENDER_TIMEOUT", "480"))
 RESOLUTION = os.getenv("SLIDE_RESOLUTION", "720")
 
@@ -279,7 +279,7 @@ async def build_slide(
     report: dict[str, Any] = {"slide_id": sid, "attempts": 0, "used_fallback": False, "error_types": []}
     t0 = time.time()
 
-    ladder = [model, model, STRONG_MODEL] if codegen else []
+    ladder = [model] * CODE_ATTEMPTS if codegen else []
     base = [
         {"role": "system", "content": SLIDE_SYSTEM_PROMPT},
         {"role": "user", "content": _slide_prompt(slide, storyboard)},

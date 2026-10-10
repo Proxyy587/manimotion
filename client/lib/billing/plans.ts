@@ -29,19 +29,15 @@ export type PlanDefinition = {
   highlighted?: boolean;
 };
 
-const FREE_MODELS = [
-  "google/gemini-2.5-flash",
-  "google/gemini-2.0-flash-001",
-  "deepseek/deepseek-v3.2",
-];
+const FREE_MODELS = ["google/gemini-2.5-flash", "deepseek/deepseek-v3.2"];
 
 const HOBBY_MODELS = [
   ...FREE_MODELS,
   "openai/gpt-4o",
-  "anthropic/claude-3.5-sonnet",
+  "anthropic/claude-sonnet-4.5",
 ];
 
-const PRO_MODELS = [...HOBBY_MODELS, "anthropic/claude-opus-4"];
+const PRO_MODELS = [...HOBBY_MODELS, "anthropic/claude-opus-4.1"];
 
 export const PLANS: PlanDefinition[] = [
   {
@@ -62,7 +58,7 @@ export const PLANS: PlanDefinition[] = [
     features: [
       "3 renders / day",
       "Gemini 2.5 Flash (default)",
-      "Gemini 2.0 Flash + DeepSeek V3.2",
+      "DeepSeek V3.2",
       "API access (chalk_* keys)",
       "720p · watermark",
       "Low queue priority",
@@ -80,14 +76,14 @@ export const PLANS: PlanDefinition[] = [
     maxResolution: "1080p",
     watermark: false,
     apiAccess: true,
-    modelTier: "GPT-4o · Claude 3.5 Sonnet",
+    modelTier: "GPT-4o · Claude Sonnet 4.5",
     models: HOBBY_MODELS,
     dodoProductIdEnv: "DODO_PRODUCT_HOBBY",
     highlighted: true,
     features: [
       "40 renders / month",
       "GPT-4o unlocked",
-      "Claude 3.5 Sonnet unlocked (best quality)",
+      "Claude Sonnet 4.5 unlocked (best quality)",
       "All Free models included",
       "1080p · no watermark",
       "API access · commercial use",
@@ -106,12 +102,12 @@ export const PLANS: PlanDefinition[] = [
     maxResolution: "1080p",
     watermark: false,
     apiAccess: true,
-    modelTier: "Claude Opus 4 · all models",
+    modelTier: "Claude Opus 4.1 · all models",
     models: PRO_MODELS,
     dodoProductIdEnv: "DODO_PRODUCT_PRO",
     features: [
       "80 renders / month",
-      "Claude Opus 4 unlocked (most capable)",
+      "Claude Opus 4.1 unlocked (most capable)",
       "All Hobby + Free models included",
       "No watermark on all renders",
       "Priority queue",

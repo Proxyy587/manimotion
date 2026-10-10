@@ -25,13 +25,6 @@ export const LECTURE_MODELS: LectureModelOption[] = [
     badge: "Fastest",
   },
   {
-    id: "google/gemini-2.0-flash-001",
-    label: "Gemini 2.0 Flash",
-    hint: "Quick · Free+",
-    minPlan: "FREE",
-    badge: "Reliable",
-  },
-  {
     id: "deepseek/deepseek-v3.2",
     label: "DeepSeek V3.2",
     hint: "Fast · Free+",
@@ -46,20 +39,32 @@ export const LECTURE_MODELS: LectureModelOption[] = [
     badge: "Balanced",
   },
   {
-    id: "anthropic/claude-3.5-sonnet",
-    label: "Claude 3.5 Sonnet",
+    id: "anthropic/claude-sonnet-4.5",
+    label: "Claude Sonnet 4.5",
     hint: "Highest quality · Hobby+",
     minPlan: "HOBBY",
     badge: "Best quality",
   },
   {
-    id: "anthropic/claude-opus-4",
-    label: "Claude Opus 4",
+    id: "anthropic/claude-opus-4.1",
+    label: "Claude Opus 4.1",
     hint: "Most capable · Pro",
     minPlan: "PRO",
     badge: "Most capable",
   },
 ];
+
+/** Retired OpenRouter ids that may still sit in saved preferences or API clients. */
+const MODEL_ALIASES: Record<string, string> = {
+  "anthropic/claude-3.5-sonnet": "anthropic/claude-sonnet-4.5",
+  "anthropic/claude-opus-4": "anthropic/claude-opus-4.1",
+  "google/gemini-2.0-flash-001": "google/gemini-2.5-flash",
+};
+
+export function normalizeModelId(id: string): string {
+  const trimmed = id.trim();
+  return MODEL_ALIASES[trimmed] ?? trimmed;
+}
 
 export const LECTURE_MODEL_OPTIONS = LECTURE_MODELS.map((m) => m.id);
 
@@ -79,7 +84,8 @@ export function isModelAllowedForPlan(
   modelId: string,
   plan: string | null | undefined,
 ): boolean {
-  const m = LECTURE_MODELS.find((x) => x.id === modelId);
+  const id = normalizeModelId(modelId);
+  const m = LECTURE_MODELS.find((x) => x.id === id);
   if (!m) return false;
   const p = (plan?.toUpperCase() ?? "FREE") as PlanId;
   return (PLAN_RANK[p] ?? 0) >= PLAN_RANK[m.minPlan];
@@ -94,12 +100,12 @@ export const DURATION_OPTIONS = [
 ] as const;
 
 const PREF_MODEL_KEY = "manimotion_pref_model";
-const PREF_DURATION_KEY = "manimotion_pref_duration";
 
 export function getPreferredModel(): string {
   if (typeof window === "undefined") return DEFAULT_LECTURE_MODEL;
   const raw = localStorage.getItem(PREF_MODEL_KEY)?.trim();
-  if (raw && LECTURE_MODELS.some((m) => m.id === raw)) return raw;
+  const id = raw ? normalizeModelId(raw) : "";
+  if (id && LECTURE_MODELS.some((m) => m.id === id)) return id;
   return DEFAULT_LECTURE_MODEL;
 }
 
@@ -108,22 +114,9 @@ export function setPreferredModel(model: string) {
   localStorage.setItem(PREF_MODEL_KEY, model);
 }
 
-export function getPreferredDuration(): number | undefined {
-  if (typeof window === "undefined") return undefined;
-  const raw = localStorage.getItem(PREF_DURATION_KEY);
-  if (raw == null || raw === "" || raw === "auto") return undefined;
-  const n = Number(raw);
-  return Number.isFinite(n) ? n : undefined;
-}
-
-export function setPreferredDuration(duration: number | undefined) {
-  if (typeof window === "undefined") return;
-  if (duration == null) localStorage.setItem(PREF_DURATION_KEY, "auto");
-  else localStorage.setItem(PREF_DURATION_KEY, String(duration));
-}
-
 export function getModelLabel(id: string): string {
-  return LECTURE_MODELS.find((m) => m.id === id)?.label ?? id;
+  const normalized = normalizeModelId(id);
+  return LECTURE_MODELS.find((m) => m.id === normalized)?.label ?? id;
 }
 
 export function getChalkboardApiBase(): string {
@@ -227,7 +220,7 @@ export async function createLectureJob(
 
   const body: Record<string, unknown> = {
     prompt,
-    model: model.trim() || DEFAULT_LECTURE_MODEL,
+    model: normalizeModelId(model) || DEFAULT_LECTURE_MODEL,
     style: opts?.style ?? "auto",
   };
   if (opts?.duration != null) body.duration = opts.duration;

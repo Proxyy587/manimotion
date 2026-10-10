@@ -127,15 +127,13 @@ def _subtitle_filter(srt_path: str) -> str:
     return f"subtitles='{escaped}':force_style='{style}'"
 
 
-def build_slide_segment(slide: dict[str, Any], video_path: str, work_dir: str) -> str:
-    """Frame-exact, silent segment: pad by cloning the last frame, optionally burn captions."""
-    _, frames = slide_length(slide)
-    sid = slide["id"]
-    out = os.path.join(work_dir, f"seg_{sid:02d}.mp4")
-    vf = f"fps={FPS},tpad=stop_mode=clone:stop_duration=3"
+def _frame_exact(
+    video_path: str, frames: int, out: str, cues: list[tuple[float, float, str]], srt: str
+) -> str:
+    """Silent copy of exactly `frames` frames (last frame cloned if short), captions burned."""
+    vf = f"fps={FPS},tpad=stop_mode=clone:stop_duration={frames / FPS + 1:.2f}"
     if BURN_CAPTIONS and _can_burn_captions():
-        srt = os.path.join(work_dir, f"seg_{sid:02d}.srt")
-        write_srt(caption_cues(slide), srt)
+        write_srt(cues, srt)
         vf += "," + _subtitle_filter(os.path.abspath(srt))
     _run([
         "ffmpeg", "-y", "-v", "error", "-i", video_path, "-vf", vf, "-frames:v", str(frames),
@@ -143,6 +141,12 @@ def build_slide_segment(slide: dict[str, Any], video_path: str, work_dir: str) -
         "-crf", "20", "-pix_fmt", "yuv420p", "-r", str(FPS), out,
     ])
     return out
+
+
+def build_slide_segment(slide: dict[str, Any], video_path: str, work_dir: str) -> str:
+    _, frames = slide_length(slide)
+    base = os.path.join(work_dir, f"seg_{slide['id']:02d}")
+    return _frame_exact(video_path, frames, base + ".mp4", caption_cues(slide), base + ".srt")
 
 
 def stream_durations(path: str) -> dict[str, float]:
@@ -159,25 +163,54 @@ def assemble(
     work_dir: str,
     log: Callable[[str], None] = print,
 ) -> tuple[str, str]:
-    """Return (final_mp4, captions_vtt). Raises AVMismatchError if A/V drift > 0.12s."""
+    """One video per slide → (final_mp4, captions_vtt). Raises AVMismatchError on drift."""
     asm = os.path.join(work_dir, "assemble")
     os.makedirs(asm, exist_ok=True)
-    segs, wavs, cues = [], [], []
-    offset = 0.0
-    for slide, video in zip(slides, videos):
-        wav = os.path.join(asm, f"seg_{slide['id']:02d}.wav")
-        length = build_slide_audio(slide, wav)
-        segs.append(build_slide_segment(slide, video, asm))
-        wavs.append(wav)
-        cues += caption_cues(slide, offset)
-        offset += length
-
+    segs = [build_slide_segment(slide, video, asm) for slide, video in zip(slides, videos)]
     vlist = os.path.join(asm, "video.txt")
     with open(vlist, "w") as f:
         f.writelines(f"file '{os.path.abspath(p)}'\n" for p in segs)
     video = os.path.join(asm, "video.mp4")
     _run(["ffmpeg", "-y", "-v", "error", "-f", "concat", "-safe", "0", "-i", vlist, "-c", "copy", video])
+    wavs, cues = _narration(slides, asm)
+    return _mux(video, wavs, cues, work_dir, log)
 
+
+def assemble_continuous(
+    slides: list[dict[str, Any]],
+    video: str,
+    work_dir: str,
+    log: Callable[[str], None] = print,
+) -> tuple[str, str]:
+    """One video for the whole lecture (slide i spans slide_length(i) frames)."""
+    asm = os.path.join(work_dir, "assemble")
+    os.makedirs(asm, exist_ok=True)
+    wavs, cues = _narration(slides, asm)
+    frames = sum(slide_length(s)[1] for s in slides)
+    exact = _frame_exact(video, frames, os.path.join(asm, "video.mp4"), cues, os.path.join(asm, "lecture.srt"))
+    return _mux(exact, wavs, cues, work_dir, log)
+
+
+def _narration(slides: list[dict[str, Any]], asm: str) -> tuple[list[str], list[tuple[float, float, str]]]:
+    wavs, cues = [], []
+    offset = 0.0
+    for slide in slides:
+        wav = os.path.join(asm, f"seg_{slide['id']:02d}.wav")
+        length = build_slide_audio(slide, wav)
+        wavs.append(wav)
+        cues += caption_cues(slide, offset)
+        offset += length
+    return wavs, cues
+
+
+def _mux(
+    video: str,
+    wavs: list[str],
+    cues: list[tuple[float, float, str]],
+    work_dir: str,
+    log: Callable[[str], None],
+) -> tuple[str, str]:
+    asm = os.path.join(work_dir, "assemble")
     audio = os.path.join(asm, "narration.wav")
     alist = os.path.join(asm, "audio.txt")
     with open(alist, "w") as f:

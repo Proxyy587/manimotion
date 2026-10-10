@@ -1,1 +1,1 @@
-"""Slide lecture pipeline (storyboard → beats → slides). Enable with PIPELINE_V2=1."""
+"""Slide lecture pipeline (storyboard → beats → slides). On by default; PIPELINE_V2=0 disables it."""

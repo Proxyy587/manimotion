@@ -30,7 +30,7 @@ from services.llm import (
 from services.merger import merge_video_audio_captions
 from services.remotion_renderer import render_remotion
 from services.renderer import get_media_duration, render_video
-from services.slides.pipeline import run_slide_lecture, slides_enabled
+from services.slides.pipeline import engine_for, run_slide_lecture, slides_enabled, style_for
 from services.storage import upload_to_r2
 from services.user_storage import UserStorageConfig
 
@@ -124,7 +124,6 @@ async def _run_manim_pipeline(
         retime_to_beats,
     )
     from services.example_store import save_successful_example
-    from services.manim_attempt_models import get_model_for_manim_attempt
     from services.manim_error_parser import build_retry_prompt, parse_manim_error
     from services.manim_sanitizer import sanitize_manim_code
     from services.manim_templates import build_guaranteed_manim_code
@@ -229,15 +228,14 @@ async def _run_manim_pipeline(
                 f"{plan_text[:5000]}"
             )
         pacing_retry = False
-        attempt_model = get_model_for_manim_attempt(attempt, model)
         log(
             f"\n🧠 Manim attempt {attempt}/{max_attempts} "
-            f"(complexity={attempt_complexity}, model={attempt_model})"
+            f"(complexity={attempt_complexity}, model={model})"
         )
         try:
             code = generate_manim_code(
                 topic=topic,
-                model=attempt_model,
+                model=model,
                 visual_plan=attempt_plan,
                 duration=duration,
                 complexity=attempt_complexity,
@@ -378,7 +376,6 @@ async def _run_remotion_pipeline(
 ) -> tuple[Optional[str], Optional[str]]:
     from services.example_store import save_successful_example
     from services.llm import judge_generated_code, quality_judge_enabled
-    from services.manim_attempt_models import get_model_for_remotion_attempt
     from services.remotion_error_parser import (
         build_remotion_retry_prompt,
         parse_remotion_error,
@@ -407,15 +404,14 @@ async def _run_remotion_pipeline(
                 "Honor BEAT start_s / duration_sec from the sheet.\n"
                 f"Original plan intent (simplify heavily):\n{plan_text[:1200]}"
             )
-        attempt_model = get_model_for_remotion_attempt(attempt, model)
         log(
             f"\n🧠 Remotion attempt {attempt}/{max_attempts} "
-            f"(complexity={attempt_complexity}, model={attempt_model})"
+            f"(complexity={attempt_complexity}, model={model})"
         )
         try:
             code = generate_remotion_code(
                 topic=topic,
-                model=attempt_model,
+                model=model,
                 visual_plan=attempt_plan,
                 duration=duration,
                 complexity=attempt_complexity,
@@ -571,10 +567,11 @@ async def process_topic_async(
             payload.update(extra)
             status_cb(status, payload)
 
-    if slides_enabled() and (engine or "auto").lower() != "remotion":
+    if slides_enabled():
         return await _run_slide_job(
             topic,
             model=model,
+            style=style_for(engine),
             duration=duration,
             job_id=job_id,
             work_dir=work_dir,
@@ -767,6 +764,7 @@ async def _run_slide_job(
     topic: str,
     *,
     model: str,
+    style: str,
     duration: Optional[int],
     job_id: str,
     work_dir: str,
@@ -778,16 +776,19 @@ async def _run_slide_job(
     max_height: int,
 ) -> dict:
     """Slide lecture pipeline: length follows the content; duration is only a hint."""
-    log("Pipeline: slide lecture (PIPELINE_V2)")
+    log(f"Pipeline: slide lecture (style={style}, model={model})")
+    engine = engine_for(style) if style != "auto" else None
     try:
         result = await run_slide_lecture(
             topic,
             model=model,
             work_dir=work_dir,
+            style=style,
             duration_hint=duration,
-            set_status=lambda status, **extra: set_status(status, engine="manim", **extra),
+            set_status=set_status,
             log=log,
         )
+        engine = result["engine"]
         final_video = _apply_plan_quality(
             result["video"],
             work_dir,
@@ -795,7 +796,7 @@ async def _run_slide_job(
             max_height=max_height,
             log_fn=log,
         )
-        set_status("uploading", engine="manim")
+        set_status("uploading", engine=engine)
         video_url = _upload_and_maybe_cleanup(
             final_video,
             object_key=_r2_object_key(job_id, "final"),
@@ -808,14 +809,14 @@ async def _run_slide_job(
         return {
             "ok": True,
             "video_url": video_url,
-            "engine": "manim",
+            "engine": engine,
             "duration": result["duration"],
             "degraded_slides": result["degraded_slides"],
         }
     except Exception as e:
         log(f"⚠️ Slide pipeline error: {e}")
         cleanup_job_dir(work_dir, log=log)
-        return {"ok": False, "error": str(e), "engine": "manim"}
+        return {"ok": False, "error": str(e), "engine": engine}
 
 
 def process_topic(

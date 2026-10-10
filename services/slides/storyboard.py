@@ -9,13 +9,18 @@ from prompts.slides_prompt import (
     STORYBOARD_RETRY_TEMPLATE,
     STORYBOARD_SYSTEM_PROMPT,
     STORYBOARD_USER_TEMPLATE,
+    STYLE_HINTS,
 )
 from services.llm import _client, _parse_json_object
 
 MIN_SLIDES, MAX_SLIDES = 3, 20
 MIN_BEATS, MAX_BEATS = 3, 6
 MIN_WORDS, MAX_WORDS = 6, 28
-KINDS = {"bullets", "equation_steps", "graph", "compare", "custom"}
+KINDS = {
+    "bullets", "equation_steps", "graph", "compare", "custom",
+    "timeline", "chart", "stats", "steps", "definition",
+}
+STYLES = {"math", "graphics"}
 _SPOKEN_FORBIDDEN = re.compile(r"[\\^_$]")
 
 
@@ -98,7 +103,11 @@ def _normalize(sb: dict[str, Any]) -> dict[str, Any]:
         )
     for i, slide in enumerate(slides, start=1):
         slide["id"] = i
-    return {"title": str(sb.get("title") or "").strip(), "slides": slides}
+    style = str(sb.get("style") or "").strip().lower()
+    if style not in STYLES:
+        mathy = any(s["kind"] in {"graph", "equation_steps"} or s["equations"] for s in slides)
+        style = "math" if mathy else "graphics"
+    return {"title": str(sb.get("title") or "").strip(), "style": style, "slides": slides}
 
 
 def _salvage(sb: dict[str, Any]) -> dict[str, Any]:
@@ -128,18 +137,41 @@ def generate_storyboard(
     model: str,
     *,
     duration_hint: Optional[int] = None,
+    style: str = "auto",
     max_retries: int = 2,
     log: Callable[[str], None] = print,
 ) -> dict[str, Any]:
     """Ask for a storyboard, re-ask with the validator's problems, then salvage."""
+    style = style if style in STYLE_HINTS else "auto"
+    sb = _generate(topic, model, duration_hint, style, max_retries, log)
+    if style != "auto":
+        sb["style"] = style
+    log(f"  🎨 Lecture style: {sb['style']}")
+    return sb
+
+
+def _generate(
+    topic: str,
+    model: str,
+    duration_hint: Optional[int],
+    style: str,
+    max_retries: int,
+    log: Callable[[str], None],
+) -> dict[str, Any]:
     length_hint = (
         f"The user would like roughly {duration_hint} seconds — a soft hint; teach properly first."
         if duration_hint
-        else "Choose the length the topic needs."
+        else (
+            "Choose the length the topic needs. Each slide is about half a minute of speech: "
+            "a focused question fits in 4–6 slides, a typical topic in 6–8, and only a broad "
+            "survey or an explicit request for depth needs more."
+        )
     )
     messages = [
         {"role": "system", "content": STORYBOARD_SYSTEM_PROMPT},
-        {"role": "user", "content": STORYBOARD_USER_TEMPLATE.format(topic=topic, length_hint=length_hint)},
+        {"role": "user", "content": STORYBOARD_USER_TEMPLATE.format(
+            topic=topic, length_hint=length_hint, style_hint=STYLE_HINTS[style]
+        )},
     ]
     last: Optional[dict[str, Any]] = None
     for attempt in range(1, max_retries + 2):

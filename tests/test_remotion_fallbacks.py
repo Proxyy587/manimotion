@@ -1,5 +1,4 @@
 from services.example_store import get_relevant_examples, save_successful_example
-from services.manim_attempt_models import get_model_for_remotion_attempt
 from services.remotion_error_parser import (
     ERROR_FIX_MAP,
     build_remotion_retry_prompt,
@@ -67,15 +66,6 @@ def test_build_remotion_retry_prompt():
     assert "BROKEN CODE" in prompt
     assert ERROR_FIX_MAP["ReferenceError"] in prompt
     assert "→  10: // line 10" in prompt
-
-
-def test_remotion_model_rotation(monkeypatch):
-    monkeypatch.setenv("MANIM_ATTEMPT_MODELS", "1:manim/model")
-    monkeypatch.setenv("REMOTION_ATTEMPT_MODELS", "1:a/one,2:b/two")
-    assert get_model_for_remotion_attempt(1, "base") == "a/one"
-    assert get_model_for_remotion_attempt(3, "base") == "b/two"
-    monkeypatch.delenv("REMOTION_ATTEMPT_MODELS")
-    assert get_model_for_remotion_attempt(1, "base") == "base"
 
 
 def test_remotion_example_store_is_separate(tmp_path, monkeypatch):

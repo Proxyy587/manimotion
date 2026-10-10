@@ -42,6 +42,7 @@ BG = "#0E1117"
 FONT = os.getenv("SLIDE_FONT", "DejaVu Sans")
 FONT_TITLE, FONT_BODY, FONT_MATH = 42, 34, 50
 MIN_TEXT, MIN_MATH = 24, 32  # below this a 720p viewer can't read it
+STILL_MAX = float(os.getenv("SLIDE_STILL_MAX", "4.0"))  # longest sentence allowed with no motion
 
 # zone -> (center_x, center_y, width, height); everything stays above the caption band
 ZONES = {
@@ -128,8 +129,9 @@ class SlideScene(Scene):
         self._next = 0
         self._prev_text_ids = set()
         self._top_limit = 3.8
+        self._title = None
         if self.SLIDE_TITLE:
-            title = Text(self.SLIDE_TITLE, font=FONT, font_size=FONT_TITLE, weight=BOLD)
+            title = self._title = Text(self.SLIDE_TITLE, font=FONT, font_size=FONT_TITLE, weight=BOLD)
             if title.width > 12.4:
                 title.scale_to_fit_width(12.4)
             title.to_edge(UP, buff=0.35)
@@ -186,6 +188,11 @@ class SlideScene(Scene):
                 self.wait(rest)
         finally:
             self._locked = True
+        if not animations and dur > STILL_MAX:
+            raise LayoutError(
+                f"beat {i} animates nothing for {dur:.1f}s; reveal or highlight what this "
+                f"sentence talks about (Indicate, Circumscribe, set_color, FadeIn of a label)"
+            )
         self._guard(i)
 
     # ---------- layout helpers ----------
@@ -271,6 +278,9 @@ class SlideScene(Scene):
         if len(new) > 2:
             errs.append(f"beat {i}: {len(new)} new text objects at once (max 2; one idea per sentence)")
         self._prev_text_ids = ids
+        content = [m for m in self.mobjects if m is not self._title and (m.width > 1e-3 or m.height > 1e-3)]
+        if not content:
+            errs.append(f"beat {i}: the slide is empty below the title; reveal this sentence's on_screen")
         if errs:
             raise LayoutError("; ".join(errs[:5]))
 

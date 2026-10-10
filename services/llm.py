@@ -30,6 +30,19 @@ DEFAULT_MODEL = os.getenv("DEFAULT_MODEL", "google/gemini-2.5-flash")
 PLANNER_MODEL = os.getenv("PLANNER_MODEL", "openai/gpt-4o-mini")
 NARRATION_MODEL = os.getenv("NARRATION_MODEL", "google/gemini-2.5-flash")
 JUDGE_MODEL = os.getenv("JUDGE_MODEL", PLANNER_MODEL)
+# OpenRouter retired these IDs; old clients and saved preferences still send them.
+MODEL_ALIASES = {
+    "anthropic/claude-3.5-sonnet": "anthropic/claude-sonnet-4.5",
+    "anthropic/claude-3-5-sonnet": "anthropic/claude-sonnet-4.5",
+    "anthropic/claude-opus-4": "anthropic/claude-opus-4.1",
+    "google/gemini-2.0-flash-001": "google/gemini-2.5-flash",
+    "google/gemini-2.0-flash": "google/gemini-2.5-flash",
+}
+
+
+def normalize_model(model: Optional[str]) -> str:
+    model = (model or "").strip() or DEFAULT_MODEL
+    return MODEL_ALIASES.get(model, model)
 # Low temperature for code: fewer invented APIs → fewer crashes.
 try:
     CODE_TEMPERATURE = float(os.getenv("CODE_TEMPERATURE", "0.3"))

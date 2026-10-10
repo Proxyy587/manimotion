@@ -85,16 +85,23 @@ DEFAULT_MODEL=google/gemini-2.5-flash
 ROUTER_MODEL=openai/gpt-4o-mini
 PLANNER_MODEL=openai/gpt-4o-mini
 
-# Slide lecture pipeline (recommended): lesson plan → one narrated sentence per beat →
+# Slide lecture pipeline (default on): lesson plan → one narrated sentence per beat →
 # one slide per idea, paced like a teacher. Video length follows the content (no caps).
+# Math topics are drawn with Manim, everything else with the fixed Remotion slide template
+# (remotion-src/src/slides). Every LLM call uses the model the user picked.
+# Set PIPELINE_V2=0 only to fall back to the legacy single-scene pipeline.
 PIPELINE_V2=1
-# Model used for the last code attempt on a slide before the plain fallback slide
-SLIDE_STRONG_MODEL=anthropic/claude-sonnet-4.5
+# Code attempts per Manim slide (same model, error fed back) before the plain fallback slide
+SLIDE_CODE_ATTEMPTS=3
+# Longest sentence allowed to play over a slide with no motion (seconds)
+SLIDE_STILL_MAX=4
 # 720 (default, 720p30) or 1080 (1080p30)
 SLIDE_RESOLUTION=720
 SLIDE_RENDER_TIMEOUT=480
-# Slides rendered in parallel (each render uses ~1 CPU core)
+# Manim slides rendered in parallel (each render uses ~1 CPU core)
 SLIDE_RENDER_WORKERS=2
+# Chrome tabs used by the Remotion slide render (default: half the cores, max 4)
+# REMOTION_CONCURRENCY=2
 TTS_VOICE=en-US-AriaNeural
 TTS_RATE=-8%
 SLIDE_FONT=DejaVu Sans
@@ -103,8 +110,6 @@ CAPTIONS_BURN=1
 
 # Manim reliability (optional, used when PIPELINE_V2 is off)
 MANIM_MAX_ATTEMPTS=3
-# Rotate models per retry (attempt:model, comma-separated; last entry covers later attempts)
-MANIM_ATTEMPT_MODELS=1:google/gemini-2.5-flash,2:google/gemini-2.5-flash,3:openai/gpt-4o
 # Save first-try successes to data/manim_success_examples.jsonl and reuse them as few-shot examples
 MANIM_SAVE_EXAMPLES=1
 # MANIM_EXAMPLES_PATH=/data/manim_success_examples.jsonl
@@ -125,8 +130,7 @@ MANIM_PACING_RETRIES=1
 # Low temperature for code generation (fewer invented APIs)
 CODE_TEMPERATURE=0.3
 
-# Remotion reliability (optional, same format as the Manim settings)
-REMOTION_ATTEMPT_MODELS=1:google/gemini-2.5-flash,2:google/gemini-2.5-flash,3:openai/gpt-4o
+# Remotion reliability (optional, legacy pipeline only)
 REMOTION_SAVE_EXAMPLES=1
 # REMOTION_EXAMPLES_PATH=/data/remotion_success_examples.jsonl
 

@@ -1,7 +1,6 @@
 import ast
 
 from services.example_store import get_relevant_examples, save_successful_example
-from services.manim_attempt_models import get_model_for_manim_attempt
 from services.manim_error_parser import ERROR_FIX_MAP, build_retry_prompt, classify_error
 from services.manim_templates import build_guaranteed_manim_code
 from services.manim_validator import validate_manim_code
@@ -49,15 +48,6 @@ def test_build_retry_prompt_contains_code_and_fix():
     assert "Fix attempt 2/3" in prompt
     assert "BROKEN CODE" in prompt
     assert ERROR_FIX_MAP["SyntaxError"] in prompt
-
-
-def test_attempt_model_rotation(monkeypatch):
-    monkeypatch.delenv("MANIM_ATTEMPT_MODELS", raising=False)
-    assert get_model_for_manim_attempt(2, "base/model") == "base/model"
-    monkeypatch.setenv("MANIM_ATTEMPT_MODELS", "1:a/one, 3:c/three, bad")
-    assert get_model_for_manim_attempt(1, "base") == "a/one"
-    assert get_model_for_manim_attempt(3, "base") == "c/three"
-    assert get_model_for_manim_attempt(5, "base") == "c/three"
 
 
 def test_example_store_roundtrip(tmp_path, monkeypatch):

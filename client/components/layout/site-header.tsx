@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { AccountMenu } from "@/components/account/account-menu";
+import { GitHubStarButton } from "@/components/layout/github-star-button";
 import { ThemeToggle } from "@/components/theme/theme-provider";
 import { useSession } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
@@ -79,6 +80,7 @@ export function SiteHeader({
         >
           Settings
         </HeaderLink>
+        <GitHubStarButton className="ml-1" />
         {!reveal && <ThemeToggle />}
         {session?.user ? (
           <AccountMenu />

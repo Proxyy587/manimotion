@@ -10,6 +10,7 @@ import { AccountMenu, HistoryMenu } from "@/components/account/account-menu";
 import { useChalkboard } from "@/components/chalkboard/chalkboard-context";
 import { ModelSelector } from "@/components/chalkboard/model-selector";
 import { LandingMark } from "@/components/landing/landing-mark";
+import { GitHubStarButton } from "@/components/layout/github-star-button";
 import { SiteHeader } from "@/components/layout/site-header";
 import { ThemeToggle } from "@/components/theme/theme-provider";
 import { useSession } from "@/lib/auth-client";
@@ -130,6 +131,7 @@ export default function LandingPage() {
       {!scrolled && (
         <div className="lp-corner">
           <span>v0.1</span>
+          <GitHubStarButton />
           {!session?.user && <HistoryMenu />}
           {session?.user ? <AccountMenu /> : null}
           <ThemeToggle />

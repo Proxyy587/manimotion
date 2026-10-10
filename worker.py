@@ -30,6 +30,7 @@ from services.llm import (
 from services.merger import merge_video_audio_captions
 from services.remotion_renderer import render_remotion
 from services.renderer import get_media_duration, render_video
+from services.slides.pipeline import run_slide_lecture, slides_enabled
 from services.storage import upload_to_r2
 from services.user_storage import UserStorageConfig
 
@@ -570,6 +571,21 @@ async def process_topic_async(
             payload.update(extra)
             status_cb(status, payload)
 
+    if slides_enabled() and (engine or "auto").lower() != "remotion":
+        return await _run_slide_job(
+            topic,
+            model=model,
+            duration=duration,
+            job_id=job_id,
+            work_dir=work_dir,
+            user_id=user_id,
+            storage_override=storage_override,
+            use_platform_storage=use_platform_storage,
+            set_status=set_status,
+            watermark=watermark,
+            max_height=max_height,
+        )
+
     video = None
     chosen_engine = None
     try:
@@ -741,39 +757,65 @@ async def process_topic_async(
             "reason": route.get("reason"),
         }
     except Exception as e:
+        # A video without its narration is not a lecture; never ship it as a success.
         log(f"⚠️ Pipeline error: {e}")
-        # Best-effort: upload whatever base video exists, then clean disk on VPS
-        try:
-            if video and os.path.exists(video):
-                set_status("uploading", engine=chosen_engine)
-                try:
-                    silent_duration = get_media_duration(video)
-                except Exception:
-                    silent_duration = None
-                video_url = _upload_and_maybe_cleanup(
-                    video,
-                    object_key=_r2_object_key(job_id, "silent"),
-                    work_dir=work_dir,
-                    user_id=user_id,
-                    storage_override=storage_override,
-                    use_platform_storage=use_platform_storage,
-                )
-                return {
-                    "ok": True,
-                    "video_url": video_url,
-                    "engine": chosen_engine,
-                    "duration": silent_duration,
-                    "warning": str(e),
-                }
-        except Exception as upload_err:
-            cleanup_job_dir(work_dir, log=log)
-            return {
-                "ok": False,
-                "error": f"{e} | upload also failed: {upload_err}",
-                "engine": chosen_engine,
-            }
         cleanup_job_dir(work_dir, log=log)
         return {"ok": False, "error": str(e), "engine": chosen_engine}
+
+
+async def _run_slide_job(
+    topic: str,
+    *,
+    model: str,
+    duration: Optional[int],
+    job_id: str,
+    work_dir: str,
+    user_id: Optional[str],
+    storage_override: Optional[UserStorageConfig],
+    use_platform_storage: bool,
+    set_status,
+    watermark: bool,
+    max_height: int,
+) -> dict:
+    """Slide lecture pipeline: length follows the content; duration is only a hint."""
+    log("Pipeline: slide lecture (PIPELINE_V2)")
+    try:
+        result = await run_slide_lecture(
+            topic,
+            model=model,
+            work_dir=work_dir,
+            duration_hint=duration,
+            set_status=lambda status, **extra: set_status(status, engine="manim", **extra),
+            log=log,
+        )
+        final_video = _apply_plan_quality(
+            result["video"],
+            work_dir,
+            watermark=watermark,
+            max_height=max_height,
+            log_fn=log,
+        )
+        set_status("uploading", engine="manim")
+        video_url = _upload_and_maybe_cleanup(
+            final_video,
+            object_key=_r2_object_key(job_id, "final"),
+            work_dir=work_dir,
+            user_id=user_id,
+            storage_override=storage_override,
+            use_platform_storage=use_platform_storage,
+        )
+        log(f"☁️ Uploaded: {video_url}")
+        return {
+            "ok": True,
+            "video_url": video_url,
+            "engine": "manim",
+            "duration": result["duration"],
+            "degraded_slides": result["degraded_slides"],
+        }
+    except Exception as e:
+        log(f"⚠️ Slide pipeline error: {e}")
+        cleanup_job_dir(work_dir, log=log)
+        return {"ok": False, "error": str(e), "engine": "manim"}
 
 
 def process_topic(

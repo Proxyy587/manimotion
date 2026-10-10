@@ -29,7 +29,9 @@ async def _stream_tts_with_words(
     audio_path = os.path.join(output_dir, "narration.mp3")
     srt_path = os.path.join(output_dir, "captions.srt")
 
-    communicate = edge_tts.Communicate(clean_script, voice=voice)
+    # edge-tts >= 7 only emits per-word timings when asked; without them beat sync
+    # and captions silently get nothing.
+    communicate = edge_tts.Communicate(clean_script, voice=voice, boundary="WordBoundary")
     submaker = edge_tts.SubMaker()
     audio_bytes = bytearray()
     word_timestamps: list[dict[str, Any]] = []

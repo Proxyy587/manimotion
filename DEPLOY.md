@@ -85,7 +85,23 @@ DEFAULT_MODEL=google/gemini-2.5-flash
 ROUTER_MODEL=openai/gpt-4o-mini
 PLANNER_MODEL=openai/gpt-4o-mini
 
-# Manim reliability (optional)
+# Slide lecture pipeline (recommended): lesson plan → one narrated sentence per beat →
+# one slide per idea, paced like a teacher. Video length follows the content (no caps).
+PIPELINE_V2=1
+# Model used for the last code attempt on a slide before the plain fallback slide
+SLIDE_STRONG_MODEL=anthropic/claude-sonnet-4.5
+# 720 (default, 720p30) or 1080 (1080p30)
+SLIDE_RESOLUTION=720
+SLIDE_RENDER_TIMEOUT=480
+# Slides rendered in parallel (each render uses ~1 CPU core)
+SLIDE_RENDER_WORKERS=2
+TTS_VOICE=en-US-AriaNeural
+TTS_RATE=-8%
+SLIDE_FONT=DejaVu Sans
+# Burn captions into the strip under the slide (a captions.vtt is always produced)
+CAPTIONS_BURN=1
+
+# Manim reliability (optional, used when PIPELINE_V2 is off)
 MANIM_MAX_ATTEMPTS=3
 # Rotate models per retry (attempt:model, comma-separated; last entry covers later attempts)
 MANIM_ATTEMPT_MODELS=1:google/gemini-2.5-flash,2:google/gemini-2.5-flash,3:openai/gpt-4o
